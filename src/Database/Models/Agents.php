@@ -139,7 +139,7 @@ class Agents extends Model
         parent::boot();
 
         //  We create and add Observer even if we wont use it.
-     //   parent::observe(AgentsObserver::class);
+        parent::observe(AgentsObserver::class);
 
         self::registerScopes();
     }
