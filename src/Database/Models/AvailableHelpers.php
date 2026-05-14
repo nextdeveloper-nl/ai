@@ -27,6 +27,7 @@ use NextDeveloper\Commons\Database\Traits\RunAsAdministrator;
  * @property string $input
  * @property $outputs
  * @property $parameters
+ * @property float $price
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property \Carbon\Carbon $deleted_at
@@ -54,6 +55,7 @@ class AvailableHelpers extends Model
             'input',
             'outputs',
             'parameters',
+            'price',
     ];
 
     /**
@@ -84,6 +86,7 @@ class AvailableHelpers extends Model
     'input' => 'string',
     'outputs' => 'array',
     'parameters' => 'array',
+    'price' => 'decimal:6',
     'created_at' => 'datetime',
     'updated_at' => 'datetime',
     'deleted_at' => 'datetime',
