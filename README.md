@@ -11,4 +11,4 @@ Please let us know if you need any commercial support. We dont have such a busin
 
 ## Want to contribute?
 
-You are very welcome to contribute of course. Please send us an email so that we can get in touch and talk about details; codewithus@nextdeveloper.com
+You are very welcome to contribute of course. Please send us an email so that we can get in touch and talk about details; support@plusclouds.com
