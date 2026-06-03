@@ -10,19 +10,19 @@ use NextDeveloper\IAM\Authorization\Roles\IAuthorizationRole;
 use NextDeveloper\IAM\Database\Models\Users;
 use NextDeveloper\IAM\Helpers\UserHelper;
 
-class AIUserRole extends AbstractRole implements IAuthorizationRole
+class AIManagerRole extends AbstractRole implements IAuthorizationRole
 {
-    public const NAME = 'ai-user';
+    public const NAME = 'ai-manager';
 
-    public const LEVEL = 150;
+    public const LEVEL = 20;
 
-    public const DESCRIPTION = 'AI user who can run helpers, manage their own sessions and view their own runs.';
+    public const DESCRIPTION = 'AI operations manager who has full access to all AI objects across all accounts.';
 
     public const DB_PREFIX = 'ai';
 
     public function apply(Builder $builder, Model $model): void
     {
-        $builder->where($model->getTable().'.iam_account_id', UserHelper::currentAccount()?->id);
+        // Managers can see all AI records across accounts — no scope applied.
     }
 
     public function getModule(): string
@@ -36,17 +36,32 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
             'ai_accounts:read',
             'ai_accounts:create',
             'ai_accounts:update',
+            'ai_accounts:delete',
 
             'ai_agents:read',
+            'ai_agents:create',
+            'ai_agents:update',
+            'ai_agents:delete',
 
             'ai_agent_tool_assignments:read',
+            'ai_agent_tool_assignments:create',
+            'ai_agent_tool_assignments:update',
+            'ai_agent_tool_assignments:delete',
 
             'ai_agent_versions:read',
+            'ai_agent_versions:create',
+            'ai_agent_versions:update',
+            'ai_agent_versions:delete',
 
             'ai_available_helpers:read',
+            'ai_available_helpers:create',
+            'ai_available_helpers:update',
+            'ai_available_helpers:delete',
 
             'ai_conversations:read',
             'ai_conversations:create',
+            'ai_conversations:update',
+            'ai_conversations:delete',
 
             'ai_sessions:read',
             'ai_sessions:create',
@@ -55,17 +70,14 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
             'ai_runs:read',
             'ai_runs:create',
+            'ai_runs:update',
+            'ai_runs:delete',
         ];
     }
 
     public function checkUpdatePolicy(Model $model, Users $user): bool
     {
-        return (int) $model->iam_account_id === (int) UserHelper::currentAccount()?->id;
-    }
-
-    public function checkDeletePolicy(Model $model, Users $user): bool
-    {
-        return (int) $model->iam_account_id === (int) UserHelper::currentAccount()?->id;
+        return true;
     }
 
     public function getLevel(): int
