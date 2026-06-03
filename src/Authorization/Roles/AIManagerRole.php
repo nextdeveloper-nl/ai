@@ -95,7 +95,7 @@ class AIManagerRole extends AbstractRole implements IAuthorizationRole
         return self::DESCRIPTION;
     }
 
-    public function canBeApplied(string $column): bool
+    public function canBeApplied($column): bool
     {
         if (self::DB_PREFIX === '*') {
             return true;
