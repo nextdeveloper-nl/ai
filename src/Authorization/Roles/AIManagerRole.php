@@ -14,7 +14,7 @@ class AIManagerRole extends AbstractRole implements IAuthorizationRole
 {
     public const NAME = 'ai-manager';
 
-    public const LEVEL = 20;
+    public const LEVEL = 100;
 
     public const DESCRIPTION = 'AI operations manager who has full access to all AI objects across all accounts.';
 

@@ -13,7 +13,7 @@ class AIAdminRole extends AbstractRole implements IAuthorizationRole
 {
     public const NAME = 'ai-admin';
 
-    public const LEVEL = 10;
+    public const LEVEL = 50;
 
     public const DESCRIPTION = 'AI admin with unrestricted access to all AI objects across all accounts.';
 
