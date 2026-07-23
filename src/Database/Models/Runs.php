@@ -172,6 +172,6 @@ class Runs extends Model
     {
         return $this->belongsTo(\NextDeveloper\AI\Database\Models\Agents::class);
     }
-    
+
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 }

@@ -17,19 +17,19 @@ class SessionsQueryFilter extends AbstractQueryFilter
      * @var Builder
      */
     protected $builder;
-    
+
     public function title($value)
     {
         return $this->builder->where('title', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function description($value)
     {
         return $this->builder->where('description', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function aiEngineName($value)
     {
         return $this->builder->where('ai_engine_name', 'ilike', '%' . $value . '%');
@@ -40,19 +40,19 @@ class SessionsQueryFilter extends AbstractQueryFilter
     {
         return $this->aiEngineName($value);
     }
-        
+
     public function thread($value)
     {
         return $this->builder->where('thread', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function run($value)
     {
         return $this->builder->where('run', 'ilike', '%' . $value . '%');
     }
 
-    
+
     public function createdAtStart($date)
     {
         return $this->builder->where('created_at', '>=', $date);
@@ -128,7 +128,7 @@ class SessionsQueryFilter extends AbstractQueryFilter
         }
     }
 
-    
+
     public function iamAccountId($value)
     {
             $iamAccount = \NextDeveloper\IAM\Database\Models\Accounts::where('uuid', $value)->first();
@@ -138,6 +138,6 @@ class SessionsQueryFilter extends AbstractQueryFilter
         }
     }
 
-    
+
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 }

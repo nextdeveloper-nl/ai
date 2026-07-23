@@ -17,19 +17,19 @@ class ConversationsQueryFilter extends AbstractQueryFilter
      * @var Builder
      */
     protected $builder;
-    
+
     public function role($value)
     {
         return $this->builder->where('role', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function message($value)
     {
         return $this->builder->where('message', 'ilike', '%' . $value . '%');
     }
 
-    
+
     public function createdAtStart($date)
     {
         return $this->builder->where('created_at', '>=', $date);
@@ -110,6 +110,6 @@ class ConversationsQueryFilter extends AbstractQueryFilter
     {
         return $this->aiSession($value);
     }
-    
+
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 }

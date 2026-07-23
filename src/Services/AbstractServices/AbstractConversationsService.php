@@ -25,7 +25,7 @@ use NextDeveloper\Commons\Exceptions\NotAllowedException;
  */
 class AbstractConversationsService
 {
-    public static function get(ConversationsQueryFilter $filter = null, array $params = []) : Collection|LengthAwarePaginator
+    public static function get(?ConversationsQueryFilter $filter = null, array $params = []) : Collection|LengthAwarePaginator
     {
         $enablePaginate = array_key_exists('paginate', $params);
 
@@ -190,7 +190,7 @@ class AbstractConversationsService
                 $data['ai_session_id']
             );
         }
-                        
+
         try {
             $model = Conversations::create($data);
         } catch(\Exception $e) {
@@ -242,7 +242,7 @@ class AbstractConversationsService
                 $data['ai_session_id']
             );
         }
-    
+
         try {
             $isUpdated = $model->update($data);
             $model = $model->fresh();

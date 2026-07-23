@@ -17,25 +17,25 @@ class RunsQueryFilter extends AbstractQueryFilter
      * @var Builder
      */
     protected $builder;
-    
+
     public function model($value)
     {
         return $this->builder->where('model', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function output($value)
     {
         return $this->builder->where('output', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function status($value)
     {
         return $this->builder->where('status', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function errorMessage($value)
     {
         return $this->builder->where('error_message', 'ilike', '%' . $value . '%');
@@ -46,7 +46,7 @@ class RunsQueryFilter extends AbstractQueryFilter
     {
         return $this->errorMessage($value);
     }
-    
+
     public function statusCode($value)
     {
         $operator = substr($value, 0, 1);
@@ -65,7 +65,7 @@ class RunsQueryFilter extends AbstractQueryFilter
     {
         return $this->statusCode($value);
     }
-    
+
     public function inputTokens($value)
     {
         $operator = substr($value, 0, 1);
@@ -84,7 +84,7 @@ class RunsQueryFilter extends AbstractQueryFilter
     {
         return $this->inputTokens($value);
     }
-    
+
     public function outputTokens($value)
     {
         $operator = substr($value, 0, 1);
@@ -103,7 +103,7 @@ class RunsQueryFilter extends AbstractQueryFilter
     {
         return $this->outputTokens($value);
     }
-    
+
     public function durationMs($value)
     {
         $operator = substr($value, 0, 1);
@@ -122,7 +122,7 @@ class RunsQueryFilter extends AbstractQueryFilter
     {
         return $this->durationMs($value);
     }
-    
+
     public function createdAtStart($date)
     {
         return $this->builder->where('created_at', '>=', $date);
@@ -203,7 +203,7 @@ class RunsQueryFilter extends AbstractQueryFilter
     {
         return $this->aiAgent($value);
     }
-    
+
     public function iamUserId($value)
     {
             $iamUser = \NextDeveloper\IAM\Database\Models\Users::where('uuid', $value)->first();
@@ -213,7 +213,7 @@ class RunsQueryFilter extends AbstractQueryFilter
         }
     }
 
-    
+
     public function iamAccountId($value)
     {
             $iamAccount = \NextDeveloper\IAM\Database\Models\Accounts::where('uuid', $value)->first();
@@ -223,6 +223,6 @@ class RunsQueryFilter extends AbstractQueryFilter
         }
     }
 
-    
+
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 }

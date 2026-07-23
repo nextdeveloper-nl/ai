@@ -55,7 +55,7 @@ class AbstractConversationsTransformer extends AbstractTransformer
     public function transform(Conversations $model)
     {
                                                 $aiSessionId = \NextDeveloper\AI\Database\Models\Sessions::where('id', $model->ai_session_id)->first();
-                        
+
         return $this->buildPayload(
             [
             'id'  =>  $model->uuid,

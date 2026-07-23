@@ -57,7 +57,7 @@ class AbstractRunsTransformer extends AbstractTransformer
                                                 $aiAgentId = \NextDeveloper\AI\Database\Models\Agents::where('id', $model->ai_agent_id)->first();
                                                             $iamUserId = \NextDeveloper\IAM\Database\Models\Users::where('id', $model->iam_user_id)->first();
                                                             $iamAccountId = \NextDeveloper\IAM\Database\Models\Accounts::where('id', $model->iam_account_id)->first();
-                        
+
         return $this->buildPayload(
             [
             'id'  =>  $model->uuid,

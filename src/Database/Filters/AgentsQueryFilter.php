@@ -17,19 +17,19 @@ class AgentsQueryFilter extends AbstractQueryFilter
      * @var Builder
      */
     protected $builder;
-    
+
     public function name($value)
     {
         return $this->builder->where('name', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function slug($value)
     {
         return $this->builder->where('slug', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function refName($value)
     {
         return $this->builder->where('ref_name', 'ilike', '%' . $value . '%');
@@ -40,13 +40,13 @@ class AgentsQueryFilter extends AbstractQueryFilter
     {
         return $this->refName($value);
     }
-        
+
     public function description($value)
     {
         return $this->builder->where('description', 'ilike', '%' . $value . '%');
     }
 
-        
+
     public function systemPrompt($value)
     {
         return $this->builder->where('system_prompt', 'ilike', '%' . $value . '%');
@@ -57,7 +57,7 @@ class AgentsQueryFilter extends AbstractQueryFilter
     {
         return $this->systemPrompt($value);
     }
-        
+
     public function responseFormat($value)
     {
         return $this->builder->where('response_format', 'ilike', '%' . $value . '%');
@@ -68,7 +68,7 @@ class AgentsQueryFilter extends AbstractQueryFilter
     {
         return $this->responseFormat($value);
     }
-    
+
     public function temperature($value)
     {
         $operator = substr($value, 0, 1);
@@ -82,7 +82,7 @@ class AgentsQueryFilter extends AbstractQueryFilter
         return $this->builder->where('temperature', $operator, $value);
     }
 
-    
+
     public function maxTokens($value)
     {
         $operator = substr($value, 0, 1);
@@ -101,7 +101,7 @@ class AgentsQueryFilter extends AbstractQueryFilter
     {
         return $this->maxTokens($value);
     }
-    
+
     public function isActive($value)
     {
         return $this->builder->where('is_active', $value);
@@ -112,7 +112,7 @@ class AgentsQueryFilter extends AbstractQueryFilter
     {
         return $this->isActive($value);
     }
-     
+
     public function createdAtStart($date)
     {
         return $this->builder->where('created_at', '>=', $date);
@@ -188,7 +188,7 @@ class AgentsQueryFilter extends AbstractQueryFilter
         }
     }
 
-    
+
     public function iamAccountId($value)
     {
             $iamAccount = \NextDeveloper\IAM\Database\Models\Accounts::where('uuid', $value)->first();
@@ -198,6 +198,6 @@ class AgentsQueryFilter extends AbstractQueryFilter
         }
     }
 
-    
+
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 }

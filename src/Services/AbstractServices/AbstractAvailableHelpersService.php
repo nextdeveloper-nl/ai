@@ -25,7 +25,7 @@ use NextDeveloper\Commons\Exceptions\NotAllowedException;
  */
 class AbstractAvailableHelpersService
 {
-    public static function get(AvailableHelpersQueryFilter $filter = null, array $params = []) : Collection|LengthAwarePaginator
+    public static function get(?AvailableHelpersQueryFilter $filter = null, array $params = []) : Collection|LengthAwarePaginator
     {
         $enablePaginate = array_key_exists('paginate', $params);
 
@@ -184,7 +184,7 @@ class AbstractAvailableHelpersService
      */
     public static function create(array $data)
     {
-        
+
         try {
             $model = AvailableHelpers::create($data);
         } catch(\Exception $e) {
@@ -230,7 +230,7 @@ class AbstractAvailableHelpersService
             );
         }
 
-        
+
         try {
             $isUpdated = $model->update($data);
             $model = $model->fresh();
