@@ -65,6 +65,7 @@ class AbstractConversationsTransformer extends AbstractTransformer
             'created_at'  =>  $model->created_at,
             'updated_at'  =>  $model->updated_at,
             'deleted_at'  =>  $model->deleted_at,
+            'metadata'  =>  $model->metadata,
             ]
         );
     }
