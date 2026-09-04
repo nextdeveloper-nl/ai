@@ -26,6 +26,7 @@ use NextDeveloper\Commons\Database\Traits\RunAsAdministrator;
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property \Carbon\Carbon $deleted_at
+ * @property  $metadata
  */
 class Conversations extends Model
 {
@@ -46,6 +47,7 @@ class Conversations extends Model
             'ai_session_id',
             'role',
             'message',
+            'metadata',
     ];
 
     /**
@@ -75,6 +77,7 @@ class Conversations extends Model
     'created_at' => 'datetime',
     'updated_at' => 'datetime',
     'deleted_at' => 'datetime',
+    'metadata' => 'array',
     ];
 
     /**
