@@ -22,7 +22,21 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
     public function apply(Builder $builder, Model $model): void
     {
-        $builder->where($model->getTable().'.iam_account_id', UserHelper::currentAccount()?->id);
+        $table = $model->getTable();
+        $accountId = UserHelper::currentAccount()?->id;
+
+        // Public helpers are available to everyone, whether they belong to an account or not
+        // (platform helpers have no account). Private ones only to their own account.
+        if ($table === 'ai_available_helpers') {
+            $builder->where(function (Builder $query) use ($table, $accountId): void {
+                $query->where($table.'.is_public', true)
+                    ->orWhere($table.'.iam_account_id', $accountId);
+            });
+
+            return;
+        }
+
+        $builder->where($table.'.iam_account_id', $accountId);
     }
 
     public function getModule(): string
