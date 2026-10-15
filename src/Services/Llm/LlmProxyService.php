@@ -26,69 +26,265 @@ class LlmProxyService
 {
     /**
      * Non-streaming chat completion. Returns [httpStatus, openAiBody, meta]; meta describes the usage log of this
-     * call (see meta()).
+     * call (see meta()). When the alias has fallbacks, the next target answers if the previous one fails in a way
+     * the alias is set to fall back on.
      */
     public static function chat(array $payload, LlmApiKeys $key): array
     {
-        $target = self::preflight($payload, $key);
-        $payload['model'] = $target->model;
-
+        $primary = self::preflight($payload, $key);
+        $chain = self::chain($primary, $key, $payload);
         $requestId = (string) Str::uuid();
-        $startedAt = microtime(true);
+        $attempts = [];
 
-        try {
-            $result = $target->driver()->chat($payload, $target->provider->base_url, self::upstreamKey($target), self::timeout());
-        } catch (\Throwable $e) {
-            self::log($target, $key, $requestId, null, ['status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'error_message' => $e->getMessage()]);
+        foreach ($chain as $i => $target) {
+            $isLast = $i === array_key_last($chain);
+            $startedAt = microtime(true);
+            $result = null;
+            $error = null;
 
-            throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
+            try {
+                $result = $target->driver()->chat(
+                    self::prepare($payload, $target), $target->provider->base_url, self::upstreamKey($target), self::attemptTimeout($primary, $isLast)
+                );
+                $failure = self::failureKind($result['status'], null);
+            } catch (\Throwable $e) {
+                $error = $e;
+                $failure = self::failureKind(null, $e);
+            }
+
+            $attempts[] = self::attempt($target, $result['status'] ?? null, $failure ? ($error?->getMessage() ?? ($result['body']['error']['message'] ?? 'upstream error')) : null, self::elapsed($startedAt));
+
+            if ($failure && !$isLast && self::shouldFallBack($primary, $failure)) {
+                continue;
+            }
+
+            $served = $target->servingFor($primary);
+            $extra = ['attempts' => $attempts, 'served_by_fallback' => $i > 0];
+
+            if ($error) {
+                self::log($served, $key, $requestId, null, $extra + ['status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'error_message' => $error->getMessage()]);
+
+                throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
+            }
+
+            $log = self::log($served, $key, $requestId, null, $extra + self::toLogResult($result, self::elapsed($startedAt), false));
+
+            return [$result['status'], $result['body'], self::meta($served, $log, $requestId)];
         }
 
-        $log = self::log($target, $key, $requestId, null, self::toLogResult($result, self::elapsed($startedAt), false));
-
-        return [$result['status'], $result['body'], self::meta($target, $log, $requestId)];
+        throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
     }
 
     /**
      * Streaming chat completion. $emit receives complete SSE strings to write to the client.
      * Returns the meta of the usage log, or null when the upstream could not be reached.
+     *
+     * Fallbacks only work until the first content byte went to the client: an error answer or a connection failure
+     * before that moves on to the next target, a stream that already started cannot be taken back.
      */
     public static function stream(array $payload, LlmApiKeys $key, callable $emit): ?array
     {
-        $target = self::preflight($payload, $key);
-        $payload['model'] = $target->model;
-
+        $primary = self::preflight($payload, $key);
+        $chain = self::chain($primary, $key, $payload);
         $requestId = (string) Str::uuid();
-        $startedAt = microtime(true);
+        $attempts = [];
 
-        try {
-            $result = $target->driver()->stream($payload, $target->provider->base_url, self::upstreamKey($target), self::timeout(), $emit);
-        } catch (\Throwable $e) {
-            self::log($target, $key, $requestId, null, ['status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'stream' => true, 'error_message' => $e->getMessage()]);
-            $emit('data: ' . json_encode((new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable'))->toArray()) . "\n\n");
+        foreach ($chain as $i => $target) {
+            $isLast = $i === array_key_last($chain);
+            $startedAt = microtime(true);
+            $committed = false;
+            $held = [];
 
-            return null;
+            // Until the first non-error chunk, error answers are held back so a fallback can replace them.
+            $gate = function (string $chunk) use (&$committed, &$held, $emit, $isLast): void {
+                if ($isLast || $committed) {
+                    $committed = true;
+                    $emit($chunk);
+
+                    return;
+                }
+
+                if (self::isErrorEvent($chunk)) {
+                    $held[] = $chunk;
+
+                    return;
+                }
+
+                $committed = true;
+                $emit($chunk);
+            };
+
+            $served = $target->servingFor($primary);
+
+            try {
+                $result = $target->driver()->stream(self::prepare($payload, $target), $target->provider->base_url, self::upstreamKey($target), self::timeout(), $gate);
+            } catch (\Throwable $e) {
+                $failure = self::failureKind(null, $e);
+                $attempts[] = self::attempt($target, null, $e->getMessage(), self::elapsed($startedAt));
+
+                if (!$committed && !$isLast && self::shouldFallBack($primary, $failure)) {
+                    continue;
+                }
+
+                self::log($served, $key, $requestId, null, ['attempts' => $attempts, 'served_by_fallback' => $i > 0, 'status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'stream' => true, 'error_message' => $e->getMessage()]);
+                $emit('data: ' . json_encode((new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable'))->toArray()) . "\n\n");
+
+                return null;
+            }
+
+            $failure = self::failureKind($result['status'], null);
+            $attempts[] = self::attempt($target, $result['status'], $failure ? 'upstream error' : null, self::elapsed($startedAt));
+
+            if ($failure && !$committed && !$isLast && self::shouldFallBack($primary, $failure)) {
+                continue;
+            }
+
+            foreach ($held as $chunk) {
+                $emit($chunk);
+            }
+
+            $log = self::log($served, $key, $requestId, null, [
+                'status'             => $result['status'] < 400 ? 'success' : 'failed',
+                'status_code'        => $result['status'],
+                'input_tokens'       => $result['input_tokens'],
+                'output_tokens'      => $result['output_tokens'],
+                'latency_ms'         => self::elapsed($startedAt),
+                'ttft_ms'            => $result['ttft_ms'],
+                'upstream_cost'      => $result['upstream_cost'] ?? null,
+                'stream'             => true,
+                'attempts'           => $attempts,
+                'served_by_fallback' => $i > 0,
+            ]);
+
+            return self::meta($served, $log, $requestId);
         }
 
-        $log = self::log($target, $key, $requestId, null, [
-            'status'        => $result['status'] < 400 ? 'success' : 'failed',
-            'status_code'   => $result['status'],
-            'input_tokens'  => $result['input_tokens'],
-            'output_tokens' => $result['output_tokens'],
-            'latency_ms'    => self::elapsed($startedAt),
-            'ttft_ms'       => $result['ttft_ms'],
-            'upstream_cost' => $result['upstream_cost'] ?? null,
-            'stream'        => true,
-        ]);
+        return null;
+    }
 
-        return self::meta($target, $log, $requestId);
+    /**
+     * The primary target followed by the alias fallbacks that can run right now (known provider, credit, limits).
+     *
+     * @return array<int, LlmTarget>
+     */
+    private static function chain(LlmTarget $primary, LlmApiKeys $key, array $payload): array
+    {
+        $chain = [$primary];
+
+        foreach (array_slice($primary->aliasRecord?->fallbacks ?? [], 0, 5) as $fallback) {
+            if (empty($fallback['provider']) || empty($fallback['model'])) {
+                continue;
+            }
+
+            try {
+                $target = ModelResolver::resolve($fallback['provider'] . '/' . $fallback['model'], $key->iam_account_id);
+                $estimate = self::assertCredit($target, $key, self::prepare($payload, $primary));
+                LlmSpendLimitService::assertWithin($key->iam_account_id, $primary->aliasRecord, $estimate);
+            } catch (LlmProxyException $e) {
+                continue;
+            }
+
+            $chain[] = $target;
+        }
+
+        return $chain;
+    }
+
+    /**
+     * Applies the request-level defaults of the alias (only where the caller sent nothing) and the upstream model id.
+     */
+    private static function prepare(array $payload, LlmTarget $target): array
+    {
+        $alias = $target->aliasRecord;
+        $payload['model'] = $target->model;
+
+        if ($alias) {
+            if ($alias->temperature !== null && !isset($payload['temperature'])) {
+                $payload['temperature'] = (float) $alias->temperature;
+            }
+
+            if ($alias->max_tokens !== null && !isset($payload['max_tokens'])) {
+                $payload['max_tokens'] = (int) $alias->max_tokens;
+            }
+
+            if (filled($alias->system_prompt)) {
+                array_unshift($payload['messages'], ['role' => 'system', 'content' => $alias->system_prompt]);
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * 'rate_limit' (429), 'timeout', 'error' (5xx, auth problems, unreachable) or null when the call is not a
+     * provider failure (success or a mistake of the caller, which another model would not fix).
+     */
+    private static function failureKind(?int $status, ?\Throwable $e): ?string
+    {
+        if ($e) {
+            return str_contains($e->getMessage(), 'cURL error 28') || str_contains($e->getMessage(), 'timed out') ? 'timeout' : 'error';
+        }
+
+        return match (true) {
+            $status === 429                                  => 'rate_limit',
+            $status >= 500 || in_array($status, [401, 403, 408], true) => 'error',
+            default                                          => null,
+        };
+    }
+
+    private static function shouldFallBack(LlmTarget $primary, ?string $failure): bool
+    {
+        $alias = $primary->aliasRecord;
+
+        return $alias && match ($failure) {
+            'rate_limit' => (bool) $alias->fallback_on_rate_limit,
+            'timeout'    => (bool) $alias->fallback_on_timeout,
+            'error'      => (bool) $alias->fallback_on_error,
+            default      => false,
+        };
+    }
+
+    /**
+     * Non-final attempts of an alias with a timeout rule are cut off after fallback_timeout_seconds.
+     */
+    private static function attemptTimeout(LlmTarget $primary, bool $isLast): int
+    {
+        $alias = $primary->aliasRecord;
+
+        if (!$isLast && $alias && $alias->fallback_on_timeout && $alias->fallback_timeout_seconds) {
+            return min(self::timeout(), (int) $alias->fallback_timeout_seconds);
+        }
+
+        return self::timeout();
+    }
+
+    /**
+     * @return array{provider: string, model: string, status: string, status_code: ?int, error: ?string, latency_ms: int}
+     */
+    private static function attempt(LlmTarget $target, ?int $statusCode, ?string $error, int $latencyMs): array
+    {
+        return [
+            'provider'    => $target->provider->slug,
+            'model'       => $target->model,
+            'status'      => $error === null && $statusCode !== null && $statusCode < 400 ? 'success' : 'failed',
+            'status_code' => $statusCode,
+            'error'       => $error,
+            'latency_ms'  => $latencyMs,
+        ];
+    }
+
+    private static function isErrorEvent(string $chunk): bool
+    {
+        $chunk = trim($chunk);
+
+        return str_starts_with($chunk, 'data:') && isset((json_decode(trim(substr($chunk, 5)), true) ?: [])['error']);
     }
 
     /**
      * What a caller needs to show and join a call: request_id matches ai_llm_usage_logs.request_id; cost is what the
      * account is charged (markup included, 0 when not billed or failed).
      *
-     * @return array{request_id: string, alias: ?string, requested_model: string, provider: string, model: string, input_tokens: int, output_tokens: int, cost: float, latency_ms: ?int, ttft_ms: ?int, status: string}
+     * @return array{request_id: string, served_by_fallback: bool, attempts: array<int, array<string, mixed>>, alias: ?string, requested_model: string, provider: string, model: string, input_tokens: int, output_tokens: int, cost: float, latency_ms: ?int, ttft_ms: ?int, status: string}
      */
     private static function meta(LlmTarget $target, LlmUsageLogs $log, string $requestId): array
     {
@@ -104,6 +300,8 @@ class LlmProxyService
             'latency_ms'      => $log->latency_ms,
             'ttft_ms'         => $log->ttft_ms,
             'status'          => $log->status,
+            'served_by_fallback' => (bool) $log->served_by_fallback,
+            'attempts'        => $log->attempts ?? [],
         ];
     }
 
@@ -135,7 +333,9 @@ class LlmProxyService
 
             try {
                 $target = ModelResolver::resolve($requested, $key->iam_account_id);
-                $reserved += self::assertCredit($target, $key, $payload, $reserved);
+                $estimate = self::assertCredit($target, $key, self::prepare($payload, $target), $reserved);
+                LlmSpendLimitService::assertWithin($key->iam_account_id, $target->aliasRecord, $reserved + $estimate);
+                $reserved += $estimate;
             } catch (LlmProxyException $e) {
                 // A broken target must not take the whole broadcast down; report it in place.
                 $targets[$i] = ['requested' => $requested, 'error' => $e->toArray()['error']];
@@ -144,7 +344,7 @@ class LlmProxyService
 
             $targets[$i] = ['requested' => $requested, 'target' => $target, 'started_at' => microtime(true)];
             $promises[$i] = $target->driver()->chatAsync(
-                array_merge($payload, ['model' => $target->model, 'stream' => false]),
+                array_merge(self::prepare($payload, $target), ['stream' => false]),
                 $target->provider->base_url,
                 self::upstreamKey($target),
                 $timeout
@@ -247,7 +447,8 @@ class LlmProxyService
         }
 
         $target = ModelResolver::resolve((string) $payload['model'], $key->iam_account_id);
-        self::assertCredit($target, $key, $payload);
+        $estimate = self::assertCredit($target, $key, self::prepare($payload, $target));
+        LlmSpendLimitService::assertWithin($key->iam_account_id, $target->aliasRecord, $estimate);
 
         return $target;
     }

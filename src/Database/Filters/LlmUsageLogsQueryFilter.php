@@ -261,4 +261,19 @@ class LlmUsageLogsQueryFilter extends AbstractQueryFilter
     }
 
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
+
+    public function alias($value)
+    {
+        return $this->builder->where('alias', 'ilike', '%' . $value . '%');
+    }
+
+    public function servedByFallback($value)
+    {
+        return $this->builder->where('served_by_fallback', filter_var($value, FILTER_VALIDATE_BOOLEAN));
+    }
+
+    public function served_by_fallback($value)
+    {
+        return $this->servedByFallback($value);
+    }
 }

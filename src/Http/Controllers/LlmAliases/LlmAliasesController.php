@@ -151,4 +151,20 @@ class LlmAliasesController extends AbstractController
 
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 
+    /**
+     * GET /ai/llm/aliases/{ref}/stats : calls, failures, fallbacks and spend of one alias.
+     */
+    public function stats($ref)
+    {
+        return $this->withArray(LlmAliasesService::stats($ref));
+    }
+
+    /**
+     * GET /ai/llm/aliases/{ref}/history : who changed what, newest first.
+     */
+    public function history($ref)
+    {
+        return $this->withArray(['data' => LlmAliasesService::history($ref)]);
+    }
+
 }

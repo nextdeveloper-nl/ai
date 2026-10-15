@@ -144,6 +144,8 @@ Route::prefix('ai')->group(function () {
         function () {
             Route::get('/', 'LlmAliases\LlmAliasesController@index');
             Route::get('/actions', 'LlmAliases\LlmAliasesController@getActions');
+            Route::get('/{ai_llm_aliases}/stats', 'LlmAliases\LlmAliasesController@stats');
+            Route::get('/{ai_llm_aliases}/history', 'LlmAliases\LlmAliasesController@history');
 
             Route::get('/{ai_llm_aliases}/{subObjects}', 'LlmAliases\LlmAliasesController@relatedObjects');
             Route::get('/{ai_llm_aliases}', 'LlmAliases\LlmAliasesController@show');
@@ -194,6 +196,7 @@ Route::prefix('ai')->group(function () {
         function () {
             Route::get('/', 'LlmUsageLogs\LlmUsageLogsController@index');
             Route::get('/actions', 'LlmUsageLogs\LlmUsageLogsController@getActions');
+            Route::get('/summary', 'LlmUsageLogs\LlmUsageLogsController@summary');
 
             Route::get('/{ai_llm_usage_logs}/{subObjects}', 'LlmUsageLogs\LlmUsageLogsController@relatedObjects');
             Route::get('/{ai_llm_usage_logs}', 'LlmUsageLogs\LlmUsageLogsController@show');
@@ -201,6 +204,10 @@ Route::prefix('ai')->group(function () {
             Route::post('/{ai_llm_usage_logs}/do/{action}', 'LlmUsageLogs\LlmUsageLogsController@doAction');
         }
     );
+
+    // Monthly spend limit of the current account.
+    Route::get('llm/limits', 'LlmLimits\\LlmLimitsController@show');
+    Route::put('llm/limits', 'LlmLimits\\LlmLimitsController@update');
 
     // Chat for logged-in users (IAM token): same pipeline as /ai/v1/chat/completions, billed to the session account.
     Route::post('llm/chat', 'Chat\\ChatController@chat');

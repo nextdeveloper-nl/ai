@@ -10,6 +10,16 @@ CREATE TABLE ai_llm_aliases (
     target_provider     text NOT NULL, -- Provider slug.
     target_model        text NOT NULL, -- Upstream model id.
     is_active           boolean NOT NULL DEFAULT true,
+    description               text,
+    fallbacks                 json, -- Ordered list of {"provider": "slug", "model": "model_id"}, tried after the primary target.
+    fallback_on_error         boolean NOT NULL DEFAULT true,
+    fallback_on_rate_limit    boolean NOT NULL DEFAULT true,
+    fallback_on_timeout       boolean NOT NULL DEFAULT false,
+    fallback_timeout_seconds  integer,
+    temperature               numeric(4,2),
+    max_tokens                integer,
+    system_prompt             text,
+    monthly_spend_limit       numeric(14,6),
     iam_account_id      bigint NOT NULL,
     iam_user_id         bigint,
     created_at          timestamp with time zone NOT NULL DEFAULT now(),

@@ -55,7 +55,7 @@ class ModelResolver
         // Platform calls are billed with the cost the upstream reports per call, so an unpriced model is still served;
         // the charge job refuses to bill when neither a reported nor a synced price exists.
 
-        return new LlmTarget($provider, $modelId, $pricing, $requested, $alias?->alias);
+        return new LlmTarget($provider, $modelId, $pricing, $requested, $alias?->alias, $alias);
     }
 
     /**

@@ -31,7 +31,15 @@ class LlmModelsTransformer extends AbstractLlmModelsTransformer
             return $transformed;
         }
 
-        $transformed = parent::transform($model);
+        $markup = 1 + ((float) config('ai.llm.markup_percent', 5)) / 100;
+        $withMarkup = fn ($price) => $price === null ? null : round((float) $price * $markup, 6);
+
+        // Prices with the markup an account is charged on platform models; the plain columns stay the upstream price.
+        $transformed = array_merge(parent::transform($model), [
+            'markup_percent'                     => (float) config('ai.llm.markup_percent', 5),
+            'input_price_per_1m_with_markup'     => $withMarkup($model->input_price_per_1m),
+            'output_price_per_1m_with_markup'    => $withMarkup($model->output_price_per_1m),
+        ]);
 
         Cache::set(
             CacheHelper::getKey('LlmModels', $model->uuid, 'Transformed'),

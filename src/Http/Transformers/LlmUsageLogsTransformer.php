@@ -31,7 +31,11 @@ class LlmUsageLogsTransformer extends AbstractLlmUsageLogsTransformer
             return $transformed;
         }
 
-        $transformed = parent::transform($model);
+        $transformed = array_merge(parent::transform($model), [
+            'alias'              => $model->alias ?? null,
+            'served_by_fallback' => (bool) $model->served_by_fallback,
+            'attempts'           => $model->attempts ?? [],
+        ]);
 
         Cache::set(
             CacheHelper::getKey('LlmUsageLogs', $model->uuid, 'Transformed'),
