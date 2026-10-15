@@ -202,6 +202,9 @@ Route::prefix('ai')->group(function () {
         }
     );
 
+    // Chat for logged-in users (IAM token): same pipeline as /ai/v1/chat/completions, billed to the session account.
+    Route::post('llm/chat', 'Chat\\ChatController@chat');
+
     // OpenAI-compatible proxy endpoints. Authenticated with an AI API key, not an IAM token.
     // These URIs must be listed in anonymous_uris of the host application (/ai/v1/*).
     Route::prefix('v1')

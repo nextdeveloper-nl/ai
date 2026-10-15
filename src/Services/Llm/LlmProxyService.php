@@ -25,7 +25,8 @@ use NextDeveloper\AI\Services\LlmUsageLogsService;
 class LlmProxyService
 {
     /**
-     * Non-streaming chat completion. Returns [httpStatus, openAiBody].
+     * Non-streaming chat completion. Returns [httpStatus, openAiBody, meta]; meta describes the usage log of this
+     * call (see meta()).
      */
     public static function chat(array $payload, LlmApiKeys $key): array
     {
@@ -43,15 +44,16 @@ class LlmProxyService
             throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
         }
 
-        self::log($target, $key, $requestId, null, self::toLogResult($result, self::elapsed($startedAt), false));
+        $log = self::log($target, $key, $requestId, null, self::toLogResult($result, self::elapsed($startedAt), false));
 
-        return [$result['status'], $result['body']];
+        return [$result['status'], $result['body'], self::meta($target, $log, $requestId)];
     }
 
     /**
      * Streaming chat completion. $emit receives complete SSE strings to write to the client.
+     * Returns the meta of the usage log, or null when the upstream could not be reached.
      */
-    public static function stream(array $payload, LlmApiKeys $key, callable $emit): void
+    public static function stream(array $payload, LlmApiKeys $key, callable $emit): ?array
     {
         $target = self::preflight($payload, $key);
         $payload['model'] = $target->model;
@@ -65,10 +67,10 @@ class LlmProxyService
             self::log($target, $key, $requestId, null, ['status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'stream' => true, 'error_message' => $e->getMessage()]);
             $emit('data: ' . json_encode((new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable'))->toArray()) . "\n\n");
 
-            return;
+            return null;
         }
 
-        self::log($target, $key, $requestId, null, [
+        $log = self::log($target, $key, $requestId, null, [
             'status'        => $result['status'] < 400 ? 'success' : 'failed',
             'status_code'   => $result['status'],
             'input_tokens'  => $result['input_tokens'],
@@ -78,6 +80,31 @@ class LlmProxyService
             'upstream_cost' => $result['upstream_cost'] ?? null,
             'stream'        => true,
         ]);
+
+        return self::meta($target, $log, $requestId);
+    }
+
+    /**
+     * What a caller needs to show and join a call: request_id matches ai_llm_usage_logs.request_id; cost is what the
+     * account is charged (markup included, 0 when not billed or failed).
+     *
+     * @return array{request_id: string, alias: ?string, requested_model: string, provider: string, model: string, input_tokens: int, output_tokens: int, cost: float, latency_ms: ?int, ttft_ms: ?int, status: string}
+     */
+    private static function meta(LlmTarget $target, LlmUsageLogs $log, string $requestId): array
+    {
+        return [
+            'request_id'      => $requestId,
+            'alias'           => $target->alias,
+            'requested_model' => $target->requestedModel,
+            'provider'        => $target->provider->slug,
+            'model'           => $target->model,
+            'input_tokens'    => (int) $log->input_tokens,
+            'output_tokens'   => (int) $log->output_tokens,
+            'cost'            => (float) $log->cost,
+            'latency_ms'      => $log->latency_ms,
+            'ttft_ms'         => $log->ttft_ms,
+            'status'          => $log->status,
+        ];
     }
 
     /**
@@ -309,8 +336,8 @@ class LlmProxyService
         ];
     }
 
-    private static function log(LlmTarget $target, LlmApiKeys $key, string $requestId, ?string $broadcastId, array $result): void
+    private static function log(LlmTarget $target, LlmApiKeys $key, string $requestId, ?string $broadcastId, array $result): LlmUsageLogs
     {
-        LlmUsageLogsService::record($target, $key->iam_account_id, $key->iam_user_id, $key->id, $requestId, $broadcastId, $result);
+        return LlmUsageLogsService::record($target, $key->iam_account_id, $key->iam_user_id, $key->id, $requestId, $broadcastId, $result);
     }
 }
