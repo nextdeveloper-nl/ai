@@ -13,6 +13,16 @@ use NextDeveloper\IAM\Helpers\UserHelper;
 class LlmChatService
 {
     /**
+     * @throws NotAllowedException when the user has none of the AI roles
+     */
+    public static function assertAiRole(): void
+    {
+        $allowed = UserHelper::hasRole('ai-user') || UserHelper::hasRole('ai-manager') || UserHelper::hasRole('ai-admin');
+
+        throw_if(!$allowed, new NotAllowedException('You need the ai-user role to use the AI proxy.'));
+    }
+
+    /**
      * An unsaved key carrying the session user/account, so the proxy bills and logs the right account without
      * the browser holding an API key. It is never persisted: usage logs get no api key (null).
      *
@@ -20,9 +30,7 @@ class LlmChatService
      */
     public static function keyForCurrentUser(): LlmApiKeys
     {
-        $allowed = UserHelper::hasRole('ai-user') || UserHelper::hasRole('ai-manager') || UserHelper::hasRole('ai-admin');
-
-        throw_if(!$allowed, new NotAllowedException('You need the ai-user role to chat.'));
+        self::assertAiRole();
 
         $key = new LlmApiKeys();
         $key->iam_user_id = UserHelper::me()->id;

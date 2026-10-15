@@ -155,11 +155,37 @@ class OpenAiCompatibleDriver implements LlmDriver
                 'input_price_per_1m'  => $in > 0 ? round($in * 1_000_000, 6) : null,
                 'output_price_per_1m' => $out > 0 ? round($out * 1_000_000, 6) : null,
                 'context_window'      => $details['max_input_tokens'] ?? null,
-                'upstream_provider'   => $details['litellm_provider'] ?? null,
+                'capabilities'        => $this->capabilities($details),
             ];
         }
 
         return $models;
+    }
+
+    /**
+     * Capability flags the upstream reports for a model (LiteLLM model info); empty when it reports nothing.
+     *
+     * @param array<string, mixed> $details
+     * @return array<string, mixed>
+     */
+    protected function capabilities(array $details): array
+    {
+        if (!$details) {
+            return [];
+        }
+
+        $mode = $details['mode'] ?? null;
+
+        return array_filter([
+            'upstream_provider' => $details['litellm_provider'] ?? null,
+            'mode'              => $mode,
+            'chat'              => $mode ? $mode === 'chat' : null,
+            'embeddings'        => $mode ? $mode === 'embedding' : null,
+            'vision'            => $details['supports_vision'] ?? null,
+            'tools'             => $details['supports_function_calling'] ?? null,
+            'json'              => $details['supports_response_schema'] ?? null,
+            'max_output_tokens' => $details['max_output_tokens'] ?? null,
+        ], fn ($v) => $v !== null);
     }
 
     /**

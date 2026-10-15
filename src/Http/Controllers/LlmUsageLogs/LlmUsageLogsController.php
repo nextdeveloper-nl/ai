@@ -94,4 +94,14 @@ class LlmUsageLogsController extends AbstractController
 
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 
+    /**
+     * GET /ai/llm/usage-logs/summary?from=&to= : totals and a per-day series by alias for the usage page.
+     */
+    public function summary(Request $request)
+    {
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date']);
+
+        return $this->withArray(LlmUsageLogsService::summaryForCurrentAccount($request->query('from'), $request->query('to')));
+    }
+
 }

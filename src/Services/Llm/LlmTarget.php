@@ -2,6 +2,7 @@
 
 namespace NextDeveloper\AI\Services\Llm;
 
+use NextDeveloper\AI\Database\Models\LlmAliases;
 use NextDeveloper\AI\Database\Models\LlmModels;
 use NextDeveloper\AI\Database\Models\LlmProviders;
 use NextDeveloper\AI\Services\Llm\Drivers\AnthropicDriver;
@@ -19,7 +20,17 @@ class LlmTarget
         public readonly ?LlmModels $pricing,
         public readonly string $requestedModel,
         public readonly ?string $alias = null,
+        public readonly ?LlmAliases $aliasRecord = null,
     ) {
+    }
+
+    /**
+     * The same target for logging purposes, but reported as the answer to what the caller originally asked for
+     * (used when a fallback target served an alias).
+     */
+    public function servingFor(LlmTarget $primary): self
+    {
+        return new self($this->provider, $this->model, $this->pricing, $primary->requestedModel, $primary->alias, $primary->aliasRecord);
     }
 
     /**

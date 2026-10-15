@@ -76,6 +76,9 @@ class LlmUsageLogs extends Model
             'ttft_ms',
             'stream',
             'error_message',
+            'alias',
+            'served_by_fallback',
+            'attempts',
             'iam_user_id',
             'iam_account_id',
     ];
@@ -118,6 +121,8 @@ class LlmUsageLogs extends Model
     'ttft_ms' => 'integer',
     'stream' => 'boolean',
     'error_message' => 'string',
+    'served_by_fallback' => 'boolean',
+    'attempts' => 'array',
     'created_at' => 'datetime',
     'updated_at' => 'datetime',
     'deleted_at' => 'datetime',

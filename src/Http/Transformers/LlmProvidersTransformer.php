@@ -5,6 +5,7 @@ namespace NextDeveloper\AI\Http\Transformers;
 use Illuminate\Support\Facades\Cache;
 use NextDeveloper\Commons\Common\Cache\CacheHelper;
 use NextDeveloper\AI\Database\Models\LlmProviders;
+use NextDeveloper\AI\Services\LlmProvidersService;
 use NextDeveloper\Commons\Http\Transformers\AbstractTransformer;
 use NextDeveloper\AI\Http\Transformers\AbstractTransformers\AbstractLlmProvidersTransformer;
 
@@ -27,17 +28,16 @@ class LlmProvidersTransformer extends AbstractLlmProvidersTransformer
             CacheHelper::getKey('LlmProviders', $model->uuid, 'Transformed')
         );
 
-        if($transformed) {
-            return $transformed;
+        if(!$transformed) {
+            $transformed = parent::transform($model);
+
+            Cache::set(
+                CacheHelper::getKey('LlmProviders', $model->uuid, 'Transformed'),
+                $transformed
+            );
         }
 
-        $transformed = parent::transform($model);
-
-        Cache::set(
-            CacheHelper::getKey('LlmProviders', $model->uuid, 'Transformed'),
-            $transformed
-        );
-
-        return $transformed;
+        // Model counts and health change all the time, so they are added after the cache.
+        return array_merge($transformed, LlmProvidersService::healthSummary($model));
     }
 }

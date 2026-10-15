@@ -105,7 +105,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
                 ->where('model_id', $model['model_id'])
                 ->first();
 
-            $capabilities = array_filter(['upstream_provider' => $model['upstream_provider'] ?? null]);
+            $capabilities = $model['capabilities'] ?? [];
 
             if (!$row) {
                 UserHelper::runAsAdmin(fn () => LlmModels::create([
@@ -134,8 +134,10 @@ class LlmProvidersService extends AbstractLlmProvidersService
                 'context_window'      => $model['context_window'] ?? null,
             ], fn ($v) => $v !== null);
 
+            // Merge, never replace: admin-edited keys (description, display_group, data_residency, retires_at, speed)
+            // live in the same column and must survive the sync.
             if ($capabilities) {
-                $changes['capabilities'] = json_encode($capabilities);
+                $changes['capabilities'] = json_encode(array_merge((array) $row->capabilities, $capabilities));
             }
 
             if (!$row->is_active) {
@@ -154,6 +156,42 @@ class LlmProvidersService extends AbstractLlmProvidersService
             ->update(['is_active' => false, 'updated_at' => now()]);
 
         return $counts;
+    }
+
+    /**
+     * Model counts and the health of the last 24 hours of a provider, from the usage logs of all accounts
+     * (only rates and counts are exposed). status: operational (>= 95% success), degraded (>= 50%), down, unknown (no calls).
+     *
+     * @return array{models_count: int, active_models_count: int, requests_24h: int, success_rate_24h: ?float, p50_latency_ms: ?int, status: string}
+     */
+    public static function healthSummary(LlmProviders $provider): array
+    {
+        $models = LlmModels::withoutGlobalScopes()->where('ai_llm_provider_id', $provider->id);
+
+        $row = DB::selectOne("
+            SELECT count(*) AS requests,
+                   count(*) FILTER (WHERE status = 'success') AS success,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE status = 'success') AS p50
+            FROM ai_llm_usage_logs
+            WHERE ai_llm_provider_id = ? AND created_at >= ? AND deleted_at IS NULL", [$provider->id, now()->subDay()]);
+
+        $requests = (int) $row->requests;
+        $rate = $requests ? round($row->success / $requests, 4) : null;
+
+        return [
+            'models_count'        => (clone $models)->count(),
+            'active_models_count' => (clone $models)->where('is_active', true)->count(),
+            'requests_24h'        => $requests,
+            'success_rate_24h'    => $rate,
+            'p50_latency_ms'      => $row->p50 !== null ? (int) round($row->p50) : null,
+            'status'              => match (true) {
+                !$provider->is_active => 'disabled',
+                $rate === null        => 'unknown',
+                $rate >= 0.95         => 'operational',
+                $rate >= 0.5          => 'degraded',
+                default               => 'down',
+            },
+        ];
     }
 
     private static function encryptKey(array $data): array
