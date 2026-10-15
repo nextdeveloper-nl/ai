@@ -72,6 +72,36 @@ class AIManagerRole extends AbstractRole implements IAuthorizationRole
             'ai_runs:create',
             'ai_runs:update',
             'ai_runs:delete',
+
+            'ai_llm_providers:read',
+            'ai_llm_providers:create',
+            'ai_llm_providers:update',
+            'ai_llm_providers:delete',
+
+            'ai_llm_models:read',
+            'ai_llm_models:create',
+            'ai_llm_models:update',
+            'ai_llm_models:delete',
+
+            'ai_llm_aliases:read',
+            'ai_llm_aliases:create',
+            'ai_llm_aliases:update',
+            'ai_llm_aliases:delete',
+
+            'ai_llm_broadcast_groups:read',
+            'ai_llm_broadcast_groups:create',
+            'ai_llm_broadcast_groups:update',
+            'ai_llm_broadcast_groups:delete',
+
+            'ai_llm_api_keys:read',
+            'ai_llm_api_keys:create',
+            'ai_llm_api_keys:update',
+            'ai_llm_api_keys:delete',
+
+            'ai_llm_usage_logs:read',
+            'ai_llm_usage_logs:create',
+            'ai_llm_usage_logs:update',
+            'ai_llm_usage_logs:delete',
         ];
     }
 
