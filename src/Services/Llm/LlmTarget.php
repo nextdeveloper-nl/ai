@@ -18,6 +18,7 @@ class LlmTarget
         public readonly string $model,
         public readonly ?LlmModels $pricing,
         public readonly string $requestedModel,
+        public readonly ?string $alias = null,
     ) {
     }
 
