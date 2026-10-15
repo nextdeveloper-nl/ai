@@ -43,12 +43,15 @@ class AIServiceProvider extends AbstractServiceProvider
      */
     public function register()
     {
+        // Merge config first: api.routes.php reads ai.llm.* while routes are registered.
+        $this->mergeConfigFrom(__DIR__ . '/../config/ai.php', 'ai');
+
         $this->registerHelpers();
         $this->registerMiddlewares('ai');
         $this->registerRoutes();
         $this->registerCommands();
+        $this->registerSchedule();
 
-        $this->mergeConfigFrom(__DIR__ . '/../config/ai.php', 'ai');
     }
 
     /**
@@ -105,11 +108,25 @@ class AIServiceProvider extends AbstractServiceProvider
      * Registers module based commands
      * @return void
      */
+    /**
+     * Prices at LiteLLM change, so the model list is refreshed on a schedule.
+     */
+    protected function registerSchedule(): void
+    {
+        $this->app->booted(function () {
+            $this->app->make(\Illuminate\Console\Scheduling\Schedule::class)
+                ->command('ai:llm-sync')
+                ->cron(config('ai.llm.litellm.sync_cron', '0 * * * *'))
+                ->when(fn () => (bool) config('ai.llm.litellm.url'))
+                ->withoutOverlapping();
+        });
+    }
+
     protected function registerCommands()
     {
         if ($this->app->runningInConsole()) {
             $this->commands([
-
+                \NextDeveloper\AI\Console\Commands\SyncLlmModelsCommand::class,
             ]);
         }
     }

@@ -15,6 +15,7 @@
   ],
   "require": {
     "php": ">=8.2.0",
+    "guzzlehttp/guzzle": "*",
     "league/fractal": "*",
     "monolog/monolog": "*"
   },

@@ -36,6 +36,17 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
             return;
         }
 
+        // Platform LLM providers and their models have no owning account and are visible to everybody.
+        // Writes on them are still blocked by checkUpdatePolicy()/checkDeletePolicy() (account must match).
+        if (in_array($table, ['ai_llm_providers', 'ai_llm_models'], true)) {
+            $builder->where(function (Builder $query) use ($table, $accountId): void {
+                $query->whereNull($table.'.iam_account_id')
+                    ->orWhere($table.'.iam_account_id', $accountId);
+            });
+
+            return;
+        }
+
         $builder->where($table.'.iam_account_id', $accountId);
     }
 
@@ -69,6 +80,33 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
             'ai_runs:read',
             'ai_runs:create',
+
+            'ai_llm_providers:read',
+            'ai_llm_providers:create',
+            'ai_llm_providers:update',
+            'ai_llm_providers:delete',
+
+            'ai_llm_models:read',
+            'ai_llm_models:create',
+            'ai_llm_models:update',
+            'ai_llm_models:delete',
+
+            'ai_llm_aliases:read',
+            'ai_llm_aliases:create',
+            'ai_llm_aliases:update',
+            'ai_llm_aliases:delete',
+
+            'ai_llm_broadcast_groups:read',
+            'ai_llm_broadcast_groups:create',
+            'ai_llm_broadcast_groups:update',
+            'ai_llm_broadcast_groups:delete',
+
+            'ai_llm_api_keys:read',
+            'ai_llm_api_keys:create',
+            'ai_llm_api_keys:update',
+            'ai_llm_api_keys:delete',
+
+            'ai_llm_usage_logs:read',
         ];
     }
 

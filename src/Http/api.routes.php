@@ -106,6 +106,116 @@ Route::prefix('ai')->group(function () {
         }
     );
 
+    // LLM proxy: providers, models, aliases, broadcast groups, api keys, usage logs
+    Route::prefix('llm/providers')->group(
+        function () {
+            Route::get('/', 'LlmProviders\LlmProvidersController@index');
+            Route::get('/actions', 'LlmProviders\LlmProvidersController@getActions');
+            Route::post('/{ai_llm_providers}/sync-models', 'LlmProviders\LlmProvidersController@syncModels');
+
+            Route::get('/{ai_llm_providers}/{subObjects}', 'LlmProviders\LlmProvidersController@relatedObjects');
+            Route::get('/{ai_llm_providers}', 'LlmProviders\LlmProvidersController@show');
+
+            Route::post('/', 'LlmProviders\LlmProvidersController@store');
+            Route::patch('/{ai_llm_providers}', 'LlmProviders\LlmProvidersController@update');
+            Route::delete('/{ai_llm_providers}', 'LlmProviders\LlmProvidersController@destroy');
+
+            Route::post('/{ai_llm_providers}/do/{action}', 'LlmProviders\LlmProvidersController@doAction');
+        }
+    );
+
+    Route::prefix('llm/models')->group(
+        function () {
+            Route::get('/', 'LlmModels\LlmModelsController@index');
+            Route::get('/actions', 'LlmModels\LlmModelsController@getActions');
+
+            Route::get('/{ai_llm_models}/{subObjects}', 'LlmModels\LlmModelsController@relatedObjects');
+            Route::get('/{ai_llm_models}', 'LlmModels\LlmModelsController@show');
+
+            Route::post('/', 'LlmModels\LlmModelsController@store');
+            Route::patch('/{ai_llm_models}', 'LlmModels\LlmModelsController@update');
+            Route::delete('/{ai_llm_models}', 'LlmModels\LlmModelsController@destroy');
+
+            Route::post('/{ai_llm_models}/do/{action}', 'LlmModels\LlmModelsController@doAction');
+        }
+    );
+
+    Route::prefix('llm/aliases')->group(
+        function () {
+            Route::get('/', 'LlmAliases\LlmAliasesController@index');
+            Route::get('/actions', 'LlmAliases\LlmAliasesController@getActions');
+
+            Route::get('/{ai_llm_aliases}/{subObjects}', 'LlmAliases\LlmAliasesController@relatedObjects');
+            Route::get('/{ai_llm_aliases}', 'LlmAliases\LlmAliasesController@show');
+
+            Route::post('/', 'LlmAliases\LlmAliasesController@store');
+            Route::patch('/{ai_llm_aliases}', 'LlmAliases\LlmAliasesController@update');
+            Route::delete('/{ai_llm_aliases}', 'LlmAliases\LlmAliasesController@destroy');
+
+            Route::post('/{ai_llm_aliases}/do/{action}', 'LlmAliases\LlmAliasesController@doAction');
+        }
+    );
+
+    Route::prefix('llm/broadcast-groups')->group(
+        function () {
+            Route::get('/', 'LlmBroadcastGroups\LlmBroadcastGroupsController@index');
+            Route::get('/actions', 'LlmBroadcastGroups\LlmBroadcastGroupsController@getActions');
+
+            Route::get('/{ai_llm_broadcast_groups}/{subObjects}', 'LlmBroadcastGroups\LlmBroadcastGroupsController@relatedObjects');
+            Route::get('/{ai_llm_broadcast_groups}', 'LlmBroadcastGroups\LlmBroadcastGroupsController@show');
+
+            Route::post('/', 'LlmBroadcastGroups\LlmBroadcastGroupsController@store');
+            Route::patch('/{ai_llm_broadcast_groups}', 'LlmBroadcastGroups\LlmBroadcastGroupsController@update');
+            Route::delete('/{ai_llm_broadcast_groups}', 'LlmBroadcastGroups\LlmBroadcastGroupsController@destroy');
+
+            Route::post('/{ai_llm_broadcast_groups}/do/{action}', 'LlmBroadcastGroups\LlmBroadcastGroupsController@doAction');
+        }
+    );
+
+    Route::prefix('llm/api-keys')->group(
+        function () {
+            Route::get('/', 'LlmApiKeys\LlmApiKeysController@index');
+            Route::get('/actions', 'LlmApiKeys\LlmApiKeysController@getActions');
+            Route::post('/{ai_llm_api_keys}/revoke', 'LlmApiKeys\LlmApiKeysController@revoke');
+            Route::post('/{ai_llm_api_keys}/regenerate', 'LlmApiKeys\LlmApiKeysController@regenerate');
+
+            Route::get('/{ai_llm_api_keys}/{subObjects}', 'LlmApiKeys\LlmApiKeysController@relatedObjects');
+            Route::get('/{ai_llm_api_keys}', 'LlmApiKeys\LlmApiKeysController@show');
+
+            Route::post('/', 'LlmApiKeys\LlmApiKeysController@store');
+            Route::patch('/{ai_llm_api_keys}', 'LlmApiKeys\LlmApiKeysController@update');
+            Route::delete('/{ai_llm_api_keys}', 'LlmApiKeys\LlmApiKeysController@destroy');
+
+            Route::post('/{ai_llm_api_keys}/do/{action}', 'LlmApiKeys\LlmApiKeysController@doAction');
+        }
+    );
+
+    Route::prefix('llm/usage-logs')->group(
+        function () {
+            Route::get('/', 'LlmUsageLogs\LlmUsageLogsController@index');
+            Route::get('/actions', 'LlmUsageLogs\LlmUsageLogsController@getActions');
+
+            Route::get('/{ai_llm_usage_logs}/{subObjects}', 'LlmUsageLogs\LlmUsageLogsController@relatedObjects');
+            Route::get('/{ai_llm_usage_logs}', 'LlmUsageLogs\LlmUsageLogsController@show');
+
+            Route::post('/{ai_llm_usage_logs}/do/{action}', 'LlmUsageLogs\LlmUsageLogsController@doAction');
+        }
+    );
+
+    // OpenAI-compatible proxy endpoints. Authenticated with an AI API key, not an IAM token.
+    // These URIs must be listed in anonymous_uris of the host application (/ai/v1/*).
+    Route::prefix('v1')
+        ->middleware([
+            \NextDeveloper\AI\Http\Middlewares\AuthenticateLlmApiKey::class,
+            \Illuminate\Routing\Middleware\ThrottleRequests::class . ':' . config('ai.llm.throttle_per_minute', 120) . ',1',
+        ])
+        ->group(function () {
+            Route::post('/chat/completions', 'Proxy\\ProxyController@chat');
+            Route::post('/messages', 'Proxy\\ProxyController@messages');
+            Route::get('/models', 'Proxy\\ProxyController@models');
+            Route::post('/broadcast/{group}', 'Proxy\\ProxyController@broadcast');
+        });
+
 // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 
 
