@@ -3,7 +3,8 @@
 namespace NextDeveloper\AI\Services\Llm;
 
 use Illuminate\Support\Carbon;
-use NextDeveloper\AI\Database\Models\LlmAccountLimits;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use NextDeveloper\AI\Database\Models\LlmAliases;
 use NextDeveloper\AI\Database\Models\LlmUsageLogs;
 use NextDeveloper\Commons\Exceptions\NotAllowedException;
@@ -40,7 +41,7 @@ class LlmSpendLimitService
 
     public static function accountLimit(int $accountId): ?float
     {
-        $limit = LlmAccountLimits::where('iam_account_id', $accountId)->value('monthly_spend_limit');
+        $limit = DB::table('ai_accounts')->where('iam_account_id', $accountId)->whereNull('deleted_at')->value('llm_spending_limit');
 
         return $limit === null ? null : (float) $limit;
     }
@@ -75,10 +76,21 @@ class LlmSpendLimitService
 
         $accountId = UserHelper::currentAccount()->id;
 
-        LlmAccountLimits::updateOrCreate(
-            ['iam_account_id' => $accountId],
-            ['monthly_spend_limit' => $limit, 'iam_user_id' => UserHelper::me()->id]
-        );
+        // The limit lives on the account's ai_accounts row; an account that never ran a helper has none yet.
+        $updated = DB::table('ai_accounts')
+            ->where('iam_account_id', $accountId)
+            ->whereNull('deleted_at')
+            ->update(['llm_spending_limit' => $limit, 'updated_at' => now()]);
+
+        if (!$updated) {
+            DB::table('ai_accounts')->insert([
+                'uuid'               => (string) Str::uuid(),
+                'iam_account_id'     => $accountId,
+                'llm_spending_limit' => $limit,
+                'created_at'         => now(),
+                'updated_at'         => now(),
+            ]);
+        }
 
         return self::status($accountId);
     }
