@@ -116,6 +116,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
                     'output_price_per_1m' => $model['output_price_per_1m'] ?? null,
                     'cache_read_price_per_1m'  => $model['cache_read_price_per_1m'] ?? null,
                     'cache_write_price_per_1m' => $model['cache_write_price_per_1m'] ?? null,
+                    'public_id'           => self::defaultPublicId($provider, $model['model_id']),
                     'context_window'      => $model['context_window'] ?? null,
                     'capabilities'        => $capabilities ?: null,
                     'is_active'           => true,
@@ -148,6 +149,11 @@ class LlmProvidersService extends AbstractLlmProvidersService
                 $changes['is_active'] = true;
             }
 
+            // Models synced before public names existed get theirs; a name an admin set is never touched.
+            if ($row->public_id === null) {
+                $changes['public_id'] = self::defaultPublicId($provider, $model['model_id']);
+            }
+
             DB::table($row->getTable())->where('id', $row->id)->update($changes + ['updated_at' => now()]);
             $counts['updated']++;
         }
@@ -160,6 +166,28 @@ class LlmProvidersService extends AbstractLlmProvidersService
             ->update(['is_active' => false, 'updated_at' => now()]);
 
         return $counts;
+    }
+
+    /**
+     * The name customers use for a synced model: "{ai.llm.public_prefix}/{model}" without the provider's own prefix, so
+     * no provider shows up in it. Null when another provider's offer already carries that name: offers are only
+     * grouped into one public model by an admin, never by the sync, because the same name can differ in quantization,
+     * context length or features.
+     */
+    public static function defaultPublicId(LlmProviders $provider, string $modelId): ?string
+    {
+        $prefix = trim((string) config('ai.llm.public_prefix', 'plusclouds'), '/');
+        $name = str_starts_with($modelId, $prefix . '/') ? substr($modelId, strlen($prefix) + 1)
+            : (str_starts_with($modelId, $provider->slug . '/') ? substr($modelId, strlen($provider->slug) + 1) : $modelId);
+        $publicId = $prefix . '/' . $name;
+
+        $taken = LlmModels::withoutGlobalScopes()
+            ->where('public_id', $publicId)
+            ->where('ai_llm_provider_id', '!=', $provider->id)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        return $taken ? null : $publicId;
     }
 
     /**

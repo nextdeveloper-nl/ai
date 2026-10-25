@@ -11,6 +11,7 @@ use NextDeveloper\AI\Services\Llm\Drivers\OpenAiCompatibleDriver;
 
 /**
  * A fully resolved upstream target: which provider, which upstream model, and its price row (if any).
+ * For a public model id, $alternates holds the other providers' offers of the same model, cheapest first.
  */
 class LlmTarget
 {
@@ -21,6 +22,8 @@ class LlmTarget
         public readonly string $requestedModel,
         public readonly ?string $alias = null,
         public readonly ?LlmAliases $aliasRecord = null,
+        public readonly ?string $publicId = null,
+        public readonly array $alternates = [],
     ) {
     }
 
@@ -30,7 +33,17 @@ class LlmTarget
      */
     public function servingFor(LlmTarget $primary): self
     {
-        return new self($this->provider, $this->model, $this->pricing, $primary->requestedModel, $primary->alias, $primary->aliasRecord);
+        return new self($this->provider, $this->model, $this->pricing, $primary->requestedModel, $primary->alias, $primary->aliasRecord, $primary->publicId);
+    }
+
+    /**
+     * The same target with the other offers of its public model to fall back on.
+     *
+     * @param array<int, LlmTarget> $alternates
+     */
+    public function withAlternates(array $alternates): self
+    {
+        return new self($this->provider, $this->model, $this->pricing, $this->requestedModel, $this->alias, $this->aliasRecord, $this->publicId, $alternates);
     }
 
     /**

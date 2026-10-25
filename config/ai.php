@@ -16,6 +16,10 @@ return [
     'llm' => [
         // Cron of ai:llm-sync, which refreshes the models and prices of every active platform provider.
         'sync_cron'          => env('AI_LLM_SYNC_CRON', '0 * * * *'),
+        // Prefix of the model names customers use ("plusclouds/gemma-4-31b-it"); providers never show up in them.
+        'public_prefix'      => env('AI_LLM_PUBLIC_PREFIX', 'plusclouds'),
+        // Let callers address a model as "provider/model" too. Off: that would reveal the provider.
+        'allow_provider_model_ids' => env('AI_LLM_ALLOW_PROVIDER_MODEL_IDS', false),
         // Bring-your-own-key: let accounts add their own upstream providers. Off until BYOK launches.
         'allow_byok'         => env('AI_LLM_ALLOW_BYOK', false),
         // Markup added on top of the upstream cost when charging the account.

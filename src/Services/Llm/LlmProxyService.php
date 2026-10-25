@@ -69,10 +69,64 @@ class LlmProxyService
 
             $log = self::log($served, $key, $requestId, null, $extra + self::toLogResult($result, self::elapsed($startedAt), false));
 
-            return [$result['status'], $result['body'], self::meta($served, $log, $requestId)];
+            [$status, $body] = self::publicAnswer($result['status'], $result['body'], $primary);
+
+            return [$status, $body, self::meta($served, $log, $requestId)];
         }
 
         throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
+    }
+
+    /**
+     * What the caller gets to see of an upstream answer: the model it asked for instead of the upstream's own id,
+     * and for failures a generic error, since upstream messages can name the provider.
+     *
+     * @return array{0: int, 1: array<string, mixed>}
+     */
+    private static function publicAnswer(int $status, array $body, LlmTarget $primary): array
+    {
+        if ($status < 400) {
+            if (isset($body['model'])) {
+                $body['model'] = $primary->requestedModel;
+            }
+
+            return [$status, $body];
+        }
+
+        [$status, $message, $type, $code] = match (true) {
+            $status === 429                                  => [429, 'Rate limit reached. Try again shortly.', 'rate_limit_error', 'rate_limit_exceeded'],
+            in_array($status, [400, 404, 413, 422], true)    => [400, 'The request was rejected by the model. Check the request parameters.', 'invalid_request_error', 'request_rejected'],
+            default                                          => [502, 'The model is temporarily unavailable.', 'api_error', 'upstream_error'],
+        };
+
+        return [$status, ['error' => ['message' => $message, 'type' => $type, 'code' => $code]]];
+    }
+
+    /**
+     * Same as publicAnswer() for one SSE event of a stream.
+     */
+    private static function publicChunk(string $chunk, LlmTarget $primary): string
+    {
+        if (!str_starts_with($chunk, 'data:')) {
+            return $chunk;
+        }
+
+        $json = json_decode(trim(substr($chunk, 5)), true);
+
+        if (!is_array($json)) {
+            return $chunk;
+        }
+
+        if (isset($json['error'])) {
+            $code = $json['error']['code'] ?? $json['error']['status'] ?? null;
+            [, $json] = self::publicAnswer(is_numeric($code) ? (int) $code : 502, $json, $primary);
+        } elseif (isset($json['model'])) {
+            $json['model'] = $primary->requestedModel;
+        } else {
+            return $chunk;
+        }
+
+        return 'data: ' . json_encode($json) . "\n\n";
     }
 
     /**
@@ -85,6 +139,8 @@ class LlmProxyService
     public static function stream(array $payload, LlmApiKeys $key, callable $emit): ?array
     {
         $primary = self::preflight($payload, $key);
+        $emitRaw = $emit;
+        $emit = fn (string $chunk) => $emitRaw(self::publicChunk($chunk, $primary));
         $chain = self::chain($primary, $key, $payload);
         $requestId = (string) Str::uuid();
         $attempts = [];
@@ -172,13 +228,25 @@ class LlmProxyService
     {
         $chain = [$primary];
 
+        // The same public model at the other providers, cheapest first.
+        foreach ($primary->alternates as $alternate) {
+            try {
+                $estimate = self::assertCredit($alternate, $key, self::prepare($payload, $alternate));
+                LlmSpendLimitService::assertWithin($key->iam_account_id, null, $estimate);
+            } catch (LlmProxyException $e) {
+                continue;
+            }
+
+            $chain[] = $alternate;
+        }
+
         foreach (array_slice($primary->aliasRecord?->fallbacks ?? [], 0, 5) as $fallback) {
             if (empty($fallback['provider']) || empty($fallback['model'])) {
                 continue;
             }
 
             try {
-                $target = ModelResolver::resolve($fallback['provider'] . '/' . $fallback['model'], $key->iam_account_id);
+                $target = ModelResolver::resolveProviderModel($fallback['provider'], $fallback['model'], $key->iam_account_id);
                 $estimate = self::assertCredit($target, $key, self::prepare($payload, $primary));
                 LlmSpendLimitService::assertWithin($key->iam_account_id, $primary->aliasRecord, $estimate);
             } catch (LlmProxyException $e) {
@@ -235,6 +303,11 @@ class LlmProxyService
 
     private static function shouldFallBack(LlmTarget $primary, ?string $failure): bool
     {
+        // Another offer of the same public model is always worth trying.
+        if ($primary->publicId) {
+            return $failure !== null;
+        }
+
         $alias = $primary->aliasRecord;
 
         return $alias && match ($failure) {
@@ -333,7 +406,9 @@ class LlmProxyService
             $requested = isset($spec['alias']) ? $spec['alias'] : (($spec['provider'] ?? '') . '/' . ($spec['model'] ?? ''));
 
             try {
-                $target = ModelResolver::resolve($requested, $key->iam_account_id);
+                $target = isset($spec['alias'])
+                    ? ModelResolver::resolve($requested, $key->iam_account_id)
+                    : ModelResolver::resolveProviderModel($spec['provider'] ?? null, $spec['model'] ?? null, $key->iam_account_id);
                 $estimate = self::assertCredit($target, $key, self::prepare($payload, $target), $reserved);
                 LlmSpendLimitService::assertWithin($key->iam_account_id, $target->aliasRecord, $reserved + $estimate);
                 $reserved += $estimate;
@@ -399,41 +474,30 @@ class LlmProxyService
     }
 
     /**
-     * OpenAI-style model list for the key's account: its active aliases plus every usable "provider/model".
+     * OpenAI-style model list for the key's account: its active aliases plus the public ids of every model it can
+     * use. Provider names and upstream model ids are never listed.
      */
     public static function listModels(LlmApiKeys $key): array
     {
-        // Same visibility rule as ModelResolver: account-owned (BYOK) providers only while ai.llm.allow_byok is on.
-        $providers = LlmProviders::withoutGlobalScopes()
-            ->where('is_active', true)
-            ->where(function ($q) use ($key) {
-                $q->whereNull('iam_account_id');
-
-                if (config('ai.llm.allow_byok', false)) {
-                    $q->orWhere('iam_account_id', $key->iam_account_id);
-                }
-            })
-            ->get(['id', 'slug']);
+        $providers = ModelResolver::usableProviders($key->iam_account_id);
 
         // Only advertise aliases that currently resolve to an available provider.
         $aliases = LlmAliases::withoutGlobalScopes()
-            ->where('iam_account_id', $key->iam_account_id)
+            ->where(fn ($q) => $q->where('iam_account_id', $key->iam_account_id)->orWhereNull('iam_account_id'))
             ->where('is_active', true)
-            ->whereIn('target_provider', $providers->pluck('slug'))
+            ->whereIn('target_provider', $providers->pluck('slug')->push(ModelResolver::publicPrefix()))
             ->pluck('alias');
 
-        $slugs = $providers->pluck('slug', 'id');
-
-        // Platform calls are billed with the cost the upstream reports per call, so unpriced models are listed too.
+        // Platform calls are billed from the upstream cost or the synced prices, so unpriced models are listed too.
         $models = LlmModels::withoutGlobalScopes()
             ->where('is_active', true)
+            ->whereNotNull('public_id')
             ->whereIn('ai_llm_provider_id', $providers->pluck('id'))
-            ->get(['ai_llm_provider_id', 'model_id'])
-            ->map(fn ($m) => $slugs[$m->ai_llm_provider_id] . '/' . $m->model_id);
+            ->pluck('public_id');
 
         return [
             'object' => 'list',
-            'data'   => $aliases->merge($models)->unique()->values()
+            'data'   => $aliases->merge($models)->unique()->sort()->values()
                 ->map(fn ($id) => ['id' => $id, 'object' => 'model', 'owned_by' => 'plusclouds'])->all(),
         ];
     }
