@@ -63,8 +63,7 @@ class OpenAiCompatibleDriverFetchModelsTest extends TestCase
             ['id' => 'greenference/not-ready', 'is_ready' => false, 'pricing' => ['prompt' => '0.000001', 'completion' => '0.000001']],
         ]];
 
-        // The second response is /model/info, which a non-LiteLLM upstream does not have.
-        $models = $this->driver([new Response(200, [], json_encode($listing)), new Response(404)])
+        $models = $this->driver([new Response(200, [], json_encode($listing))])
             ->fetchModels('https://llm.test/v1', 'key', 5);
 
         $this->assertCount(1, $models, 'A model that is not ready is left out.');

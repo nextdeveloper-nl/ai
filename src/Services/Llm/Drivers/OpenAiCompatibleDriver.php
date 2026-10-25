@@ -7,7 +7,7 @@ use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Promise\PromiseInterface;
 
 /**
- * Driver for OpenAI-compatible upstreams (OpenAI, LiteLLM, vLLM, OpenRouter, ...).
+ * Driver for OpenAI-compatible upstreams (OpenAI, Greenference, vLLM, OpenRouter, ...).
  * $baseUrl is expected to include the version segment, e.g. https://api.openai.com/v1
  */
 class OpenAiCompatibleDriver implements LlmDriver
@@ -111,35 +111,14 @@ class OpenAiCompatibleDriver implements LlmDriver
     }
 
     /**
-     * Lists the upstream models. When the upstream is a LiteLLM proxy, /model/info is merged in so prices
-     * (per 1M tokens), context window and the real upstream provider come along; a zero or missing price is
-     * reported as null, never as "free".
+     * Lists the upstream models from GET /models. Upstreams that list per-token prices there (OpenRouter style:
+     * pricing.prompt, completion, input_cache_read, input_cache_write) come with prices per 1M tokens, context
+     * window and capabilities; a zero or missing price is reported as null, never as "free".
      */
     public function fetchModels(string $baseUrl, string $apiKey, int $timeout): array
     {
-        $base = rtrim($baseUrl, '/');
-        $client = $this->client($timeout);
-        $response = $client->get($base . '/models', ['headers' => $this->headers($apiKey)]);
+        $response = $this->client($timeout)->get(rtrim($baseUrl, '/') . '/models', ['headers' => $this->headers($apiKey)]);
         $data = json_decode((string) $response->getBody(), true)['data'] ?? [];
-
-        $info = [];
-
-        try {
-            $infoResponse = $client->get(preg_replace('#/v\d+$#', '', $base) . '/model/info', ['headers' => $this->headers($apiKey)]);
-
-            foreach (json_decode((string) $infoResponse->getBody(), true)['data'] ?? [] as $entry) {
-                $name = $entry['model_name'] ?? null;
-                $details = $entry['model_info'] ?? [];
-                $hasPrice = !empty($details['input_cost_per_token']) && !empty($details['output_cost_per_token']);
-
-                // LiteLLM can list a name more than once (load balancing); keep the entry that carries prices.
-                if ($name && (!isset($info[$name]) || $hasPrice)) {
-                    $info[$name] = $details;
-                }
-            }
-        } catch (\Throwable $e) {
-            // Not a LiteLLM proxy (or no admin access): plain model list only.
-        }
 
         $models = [];
 
@@ -153,14 +132,12 @@ class OpenAiCompatibleDriver implements LlmDriver
                 continue;
             }
 
-            $details = $info[$m['id']] ?? [];
             $pricing = is_array($m['pricing'] ?? null) ? $m['pricing'] : [];
 
-            // Upstreams that list prices per token on /models (OpenRouter style) win over LiteLLM's /model/info.
-            $in = (float) ($pricing['prompt'] ?? $details['input_cost_per_token'] ?? 0);
-            $out = (float) ($pricing['completion'] ?? $details['output_cost_per_token'] ?? 0);
-            $cacheRead = (float) ($pricing['input_cache_read'] ?? $details['cache_read_input_token_cost'] ?? 0);
-            $cacheWrite = (float) ($pricing['input_cache_write'] ?? $details['cache_creation_input_token_cost'] ?? 0);
+            $in = (float) ($pricing['prompt'] ?? 0);
+            $out = (float) ($pricing['completion'] ?? 0);
+            $cacheRead = (float) ($pricing['input_cache_read'] ?? 0);
+            $cacheWrite = (float) ($pricing['input_cache_write'] ?? 0);
 
             $models[] = [
                 'model_id'                => $m['id'],
@@ -170,8 +147,8 @@ class OpenAiCompatibleDriver implements LlmDriver
                 // Cache prices of 0 are real (free cache writes), so only a missing price is null.
                 'cache_read_price_per_1m' => isset($pricing['input_cache_read']) || $cacheRead > 0 ? round($cacheRead * 1_000_000, 6) : null,
                 'cache_write_price_per_1m' => isset($pricing['input_cache_write']) || $cacheWrite > 0 ? round($cacheWrite * 1_000_000, 6) : null,
-                'context_window'          => $m['context_length'] ?? $details['max_input_tokens'] ?? null,
-                'capabilities'            => $this->capabilities($details) + $this->listedCapabilities($m),
+                'context_window'          => $m['context_length'] ?? null,
+                'capabilities'            => $this->listedCapabilities($m),
             ];
         }
 
@@ -200,37 +177,11 @@ class OpenAiCompatibleDriver implements LlmDriver
     }
 
     /**
-     * Capability flags the upstream reports for a model (LiteLLM model info); empty when it reports nothing.
-     *
-     * @param array<string, mixed> $details
-     * @return array<string, mixed>
-     */
-    protected function capabilities(array $details): array
-    {
-        if (!$details) {
-            return [];
-        }
-
-        $mode = $details['mode'] ?? null;
-
-        return array_filter([
-            'upstream_provider' => $details['litellm_provider'] ?? null,
-            'mode'              => $mode,
-            'chat'              => $mode ? $mode === 'chat' : null,
-            'embeddings'        => $mode ? $mode === 'embedding' : null,
-            'vision'            => $details['supports_vision'] ?? null,
-            'tools'             => $details['supports_function_calling'] ?? null,
-            'json'              => $details['supports_response_schema'] ?? null,
-            'max_output_tokens' => $details['max_output_tokens'] ?? null,
-        ], fn ($v) => $v !== null);
-    }
-
-    /**
-     * Cost in USD the upstream itself reported for this call (LiteLLM: usage.cost or x-litellm-response-cost).
+     * Cost in USD the upstream itself reported for this call (usage.cost); null when it reports none.
      */
     protected function reportedCost(array $usage, $response): ?float
     {
-        $cost = $usage['cost'] ?? ($response ? $response->getHeaderLine('x-litellm-response-cost') : null);
+        $cost = $usage['cost'] ?? null;
 
         return is_numeric($cost) && (float) $cost > 0 ? (float) $cost : null;
     }

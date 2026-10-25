@@ -11,7 +11,7 @@ class AnthropicMessagesAdapterTest extends TestCase
     public function test_request_maps_system_messages_and_parameters(): void
     {
         $payload = AnthropicMessagesAdapter::toOpenAiRequest([
-            'model'          => 'litellm/crm-general',
+            'model'          => 'plusclouds/crm-general',
             'system'         => [['type' => 'text', 'text' => 'Be brief.']],
             'max_tokens'     => 50,
             'stop_sequences' => ['END'],
@@ -69,10 +69,10 @@ class AnthropicMessagesAdapterTest extends TestCase
             'id'      => 'chatcmpl-1',
             'choices' => [['finish_reason' => 'length', 'message' => ['content' => 'Hi there']]],
             'usage'   => ['prompt_tokens' => 7, 'completion_tokens' => 3],
-        ], 'litellm/crm-general');
+        ], 'plusclouds/crm-general');
 
         self::assertSame('message', $message['type']);
-        self::assertSame('litellm/crm-general', $message['model']);
+        self::assertSame('plusclouds/crm-general', $message['model']);
         self::assertSame([['type' => 'text', 'text' => 'Hi there']], $message['content']);
         self::assertSame('max_tokens', $message['stop_reason']);
         self::assertSame(['input_tokens' => 7, 'output_tokens' => 3], $message['usage']);
@@ -102,7 +102,7 @@ class AnthropicMessagesAdapterTest extends TestCase
 
     public function test_stream_translates_text_chunks_into_anthropic_events(): void
     {
-        $t = new AnthropicStreamTranslator('litellm/crm-general');
+        $t = new AnthropicStreamTranslator('plusclouds/crm-general');
         $chunk = fn (array $d) => 'data: ' . json_encode($d) . "\n\n";
 
         $out = array_merge(

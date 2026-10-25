@@ -14,13 +14,8 @@ return [
 
     // LLM proxy settings (providers, aliases, broadcasts, api keys, usage).
     'llm' => [
-        // The platform LiteLLM gateway every customer call is routed through (see ai:llm-sync).
-        'litellm' => [
-            'slug'      => 'litellm',
-            'url'       => env('LITELLM_URL'),
-            'key'       => env('LITELLM_KEY'),
-            'sync_cron' => env('AI_LLM_SYNC_CRON', '0 * * * *'),
-        ],
+        // Cron of ai:llm-sync, which refreshes the models and prices of every active platform provider.
+        'sync_cron'          => env('AI_LLM_SYNC_CRON', '0 * * * *'),
         // Bring-your-own-key: let accounts add their own upstream providers. Off until BYOK launches.
         'allow_byok'         => env('AI_LLM_ALLOW_BYOK', false),
         // Markup added on top of the upstream cost when charging the account.
