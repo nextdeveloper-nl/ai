@@ -11,6 +11,9 @@ CREATE TABLE ai_llm_models (
     display_name            text,
     input_price_per_1m      numeric(14,6), -- Upstream cost per 1M input tokens. NULL = unpriced (charging will retry).
     output_price_per_1m     numeric(14,6),
+    cache_read_price_per_1m numeric(14,6), -- Upstream cost per 1M cached input tokens read. NULL = billed as normal input.
+    cache_write_price_per_1m numeric(14,6), -- Upstream cost per 1M input tokens written to the cache. NULL = billed as normal input.
+    public_id               text, -- Name customers use. Offers of several providers sharing a public_id are the same model; the cheapest answers.
     context_window          integer,
     capabilities            json,
     is_active               boolean NOT NULL DEFAULT true,
@@ -27,4 +30,5 @@ CREATE TABLE ai_llm_models (
 
 CREATE UNIQUE INDEX uq_ai_llm_models_provider_model ON ai_llm_models (ai_llm_provider_id, model_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_ai_llm_models_uuid ON ai_llm_models USING btree (uuid);
+CREATE INDEX idx_ai_llm_models_public_id ON ai_llm_models USING btree (public_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_ai_llm_models_provider ON ai_llm_models USING btree (ai_llm_provider_id);

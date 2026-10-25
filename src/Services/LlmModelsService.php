@@ -49,14 +49,23 @@ class LlmModelsService extends AbstractLlmModelsService
     /**
      * Upstream cost in USD for the given token counts, or null when the model has no prices.
      */
-    public static function calculateCost(LlmModels $model, int $inputTokens, int $outputTokens): ?float
+    public static function calculateCost(LlmModels $model, int $inputTokens, int $outputTokens, int $cacheReadTokens = 0, int $cacheWriteTokens = 0): ?float
     {
         if ($model->input_price_per_1m === null || $model->output_price_per_1m === null) {
             return null;
         }
 
+        $input = (float) $model->input_price_per_1m;
+
+        // Cached tokens are part of the input count; they cost their own price, or the normal input price when none is set.
+        $cacheRead = min($cacheReadTokens, $inputTokens);
+        $cacheWrite = min($cacheWriteTokens, $inputTokens - $cacheRead);
+        $plain = $inputTokens - $cacheRead - $cacheWrite;
+
         return round(
-            ($inputTokens / 1_000_000) * (float) $model->input_price_per_1m
+            ($plain / 1_000_000) * $input
+            + ($cacheRead / 1_000_000) * (float) ($model->cache_read_price_per_1m ?? $input)
+            + ($cacheWrite / 1_000_000) * (float) ($model->cache_write_price_per_1m ?? $input)
             + ($outputTokens / 1_000_000) * (float) $model->output_price_per_1m,
             8
         );

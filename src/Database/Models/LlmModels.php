@@ -22,6 +22,9 @@ use NextDeveloper\Commons\Database\Traits\RunAsAdministrator;
  * @property string $display_name
  * @property $input_price_per_1m
  * @property $output_price_per_1m
+ * @property $cache_read_price_per_1m
+ * @property $cache_write_price_per_1m
+ * @property string $public_id
  * @property integer $context_window
  * @property array $capabilities
  * @property boolean $is_active
@@ -51,6 +54,9 @@ class LlmModels extends Model
             'display_name',
             'input_price_per_1m',
             'output_price_per_1m',
+            'cache_read_price_per_1m',
+            'cache_write_price_per_1m',
+            'public_id',
             'context_window',
             'capabilities',
             'is_active',

@@ -114,6 +114,8 @@ class LlmProvidersService extends AbstractLlmProvidersService
                     'display_name'        => $model['display_name'],
                     'input_price_per_1m'  => $model['input_price_per_1m'] ?? null,
                     'output_price_per_1m' => $model['output_price_per_1m'] ?? null,
+                    'cache_read_price_per_1m'  => $model['cache_read_price_per_1m'] ?? null,
+                    'cache_write_price_per_1m' => $model['cache_write_price_per_1m'] ?? null,
                     'context_window'      => $model['context_window'] ?? null,
                     'capabilities'        => $capabilities ?: null,
                     'is_active'           => true,
@@ -131,6 +133,8 @@ class LlmProvidersService extends AbstractLlmProvidersService
                 'display_name'        => $model['display_name'],
                 'input_price_per_1m'  => $model['input_price_per_1m'] ?? null,
                 'output_price_per_1m' => $model['output_price_per_1m'] ?? null,
+                'cache_read_price_per_1m'  => $model['cache_read_price_per_1m'] ?? null,
+                'cache_write_price_per_1m' => $model['cache_write_price_per_1m'] ?? null,
                 'context_window'      => $model['context_window'] ?? null,
             ], fn ($v) => $v !== null);
 
