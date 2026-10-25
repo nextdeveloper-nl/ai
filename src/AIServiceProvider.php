@@ -109,15 +109,21 @@ class AIServiceProvider extends AbstractServiceProvider
      * @return void
      */
     /**
-     * Prices at LiteLLM change, so the model list is refreshed on a schedule.
+     * Upstream prices change, so the models of the platform providers are refreshed on a schedule.
      */
     protected function registerSchedule(): void
     {
         $this->app->booted(function () {
             $this->app->make(\Illuminate\Console\Scheduling\Schedule::class)
                 ->command('ai:llm-sync')
-                ->cron(config('ai.llm.litellm.sync_cron', '0 * * * *'))
-                ->when(fn () => (bool) config('ai.llm.litellm.url'))
+                ->cron(config('ai.llm.sync_cron', '0 * * * *'))
+                ->when(function () {
+                    try {
+                        return \NextDeveloper\AI\Database\Models\LlmProviders::withoutGlobalScopes()->whereNull('iam_account_id')->where('is_active', true)->exists();
+                    } catch (\Throwable) {
+                        return false;
+                    }
+                })
                 ->withoutOverlapping();
         });
     }

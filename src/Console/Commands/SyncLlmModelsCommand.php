@@ -4,51 +4,48 @@ namespace NextDeveloper\AI\Console\Commands;
 
 use Illuminate\Console\Command;
 use NextDeveloper\AI\Database\Models\LlmProviders;
-use NextDeveloper\AI\Helpers\LlmKeyHelper;
 use NextDeveloper\AI\Services\LlmProvidersService;
 
 /**
- * Keeps the platform LiteLLM provider and its models (with current prices) in sync with the LiteLLM gateway.
- * The gateway url and key come from config('ai.llm.litellm'), never from the API.
+ * Keeps the models and prices of the platform providers in sync with what the providers list themselves.
+ * A provider's url and key live in ai_llm_providers (see ai:llm-provider-create), never in configuration.
  */
 class SyncLlmModelsCommand extends Command
 {
-    protected $signature = 'ai:llm-sync';
+    protected $signature = 'ai:llm-sync {slug? : Only sync this provider (default: every active platform provider)}';
 
-    protected $description = 'Sync the platform LiteLLM provider and its models/prices into ai_llm_providers and ai_llm_models';
+    protected $description = 'Sync the models and prices of the platform LLM providers into ai_llm_models';
 
     public function handle(): int
     {
-        $config = config('ai.llm.litellm');
+        $providers = LlmProviders::withoutGlobalScopes()
+            ->whereNull('iam_account_id')
+            ->where('is_active', true)
+            ->when($this->argument('slug'), fn ($q, $slug) => $q->where('slug', $slug))
+            ->orderBy('slug')
+            ->get();
 
-        if (empty($config['url']) || empty($config['key'])) {
-            $this->error('ai.llm.litellm.url / key are not configured (LITELLM_URL, LITELLM_KEY).');
+        if ($providers->isEmpty()) {
+            $this->error('No active platform provider found. Create one with ai:llm-provider-create.');
 
             return self::FAILURE;
         }
 
-        $slug = $config['slug'] ?? 'litellm';
-        $values = [
-            'name'              => 'PlusClouds AI Gateway',
-            'driver'            => 'openai_compatible',
-            'base_url'          => rtrim($config['url'], '/'),
-            'api_key_encrypted' => LlmKeyHelper::encrypt($config['key']),
-            'is_active'         => true,
-        ];
+        $failed = false;
 
-        $provider = LlmProviders::withoutGlobalScopes()->whereNull('iam_account_id')->where('slug', $slug)->first();
+        foreach ($providers as $provider) {
+            try {
+                $counts = LlmProvidersService::syncProviderModels($provider);
+            } catch (\Throwable $e) {
+                $failed = true;
+                $this->error("{$provider->slug}: " . $e->getMessage());
 
-        if ($provider) {
-            $provider->forceFill($values)->saveQuietly();
-        } else {
-            $provider = new LlmProviders($values + ['slug' => $slug]);
-            $provider->saveQuietly();
+                continue;
+            }
+
+            $this->info(sprintf('%s: %d created, %d updated, %d deactivated.', $provider->slug, $counts['created'], $counts['updated'], $counts['deactivated']));
         }
 
-        $counts = LlmProvidersService::syncProviderModels($provider->fresh());
-
-        $this->info(sprintf('%s: %d created, %d updated, %d deactivated.', $slug, $counts['created'], $counts['updated'], $counts['deactivated']));
-
-        return self::SUCCESS;
+        return $failed ? self::FAILURE : self::SUCCESS;
     }
 }

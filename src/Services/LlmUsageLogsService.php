@@ -29,7 +29,7 @@ class LlmUsageLogsService extends AbstractLlmUsageLogsService
         $out = (int) ($result['output_tokens'] ?? 0);
         $success = ($result['status'] ?? 'failed') === 'success';
 
-        // The cost LiteLLM reported for this very call is the most current price; the synced model prices are the fallback.
+        // The cost the upstream reported for this very call is the most current price; the synced model prices are the fallback.
         $upstreamCost = $result['upstream_cost'] ?? ($target->pricing ? LlmModelsService::calculateCost($target->pricing, $in, $out, (int) ($result['cache_read_tokens'] ?? 0), (int) ($result['cache_write_tokens'] ?? 0)) : null);
         $billable = $target->isBilled() && $success;
         $cost = $billable && $upstreamCost !== null

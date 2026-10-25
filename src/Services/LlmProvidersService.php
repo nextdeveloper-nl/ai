@@ -83,7 +83,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
 
     /**
      * Upserts the upstream models of a provider. Prices, context window and the upstream vendor come from the
-     * upstream on every run (LiteLLM prices change); models that vanished upstream are deactivated, never deleted,
+     * upstream on every run (upstream prices change); models that vanished upstream are deactivated, never deleted,
      * so old usage logs keep their reference. Runs without role checks: callers (command, admin action) are trusted.
      *
      * @return array{created: int, updated: int, deactivated: int}
