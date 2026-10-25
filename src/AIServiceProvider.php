@@ -127,6 +127,7 @@ class AIServiceProvider extends AbstractServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \NextDeveloper\AI\Console\Commands\SyncLlmModelsCommand::class,
+                \NextDeveloper\AI\Console\Commands\CreateLlmProviderCommand::class,
             ]);
         }
     }
