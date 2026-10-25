@@ -134,6 +134,7 @@ class AIServiceProvider extends AbstractServiceProvider
             $this->commands([
                 \NextDeveloper\AI\Console\Commands\SyncLlmModelsCommand::class,
                 \NextDeveloper\AI\Console\Commands\CreateLlmProviderCommand::class,
+                \NextDeveloper\AI\Console\Commands\SeedHelperAliasesCommand::class,
             ]);
         }
     }
