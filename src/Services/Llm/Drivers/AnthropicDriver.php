@@ -84,7 +84,8 @@ class AnthropicDriver implements LlmDriver
                 throw $e;
             }
             $response = $e->getResponse();
-            $onChunk('data: ' . (string) $response->getBody() . "\n\n");
+            // Never forward the upstream body: it can be a multi-line page that names the provider.
+            $onChunk('data: ' . json_encode(['error' => ['message' => 'Upstream error.', 'code' => $response->getStatusCode()]]) . "\n\n");
 
             return ['status' => $response->getStatusCode(), 'input_tokens' => 0, 'output_tokens' => 0, 'ttft_ms' => null];
         }

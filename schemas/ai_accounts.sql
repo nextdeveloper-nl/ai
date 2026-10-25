@@ -8,6 +8,7 @@ CREATE TABLE ai_accounts (
     total_runs      integer NOT NULL DEFAULT 0, -- Lifetime total number of ai_runs for this account.
     total_cost      numeric(14,6) NOT NULL DEFAULT 0, -- Lifetime total cost of ai_runs for this account.
     configuration   json, -- Account-level AI configuration overrides.
+    llm_spending_limit numeric(14,6), -- Monthly LLM proxy spend limit in USD, NULL = no limit.
     is_active       boolean NOT NULL DEFAULT true,
     created_at      timestamp with time zone NOT NULL DEFAULT now(),
     updated_at      timestamp with time zone NOT NULL DEFAULT now(),

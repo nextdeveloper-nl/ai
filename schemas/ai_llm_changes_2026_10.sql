@@ -45,21 +45,8 @@ CREATE TABLE IF NOT EXISTS ai_llm_alias_history (
 
 CREATE INDEX IF NOT EXISTS idx_ai_llm_alias_history_alias ON ai_llm_alias_history USING btree (ai_llm_alias_id, created_at);
 
--- Account level monthly spend limit.
-CREATE SEQUENCE IF NOT EXISTS ai_llm_account_limits_id_seq;
-
-CREATE TABLE IF NOT EXISTS ai_llm_account_limits (
-    id                      bigint NOT NULL DEFAULT nextval('ai_llm_account_limits_id_seq'::regclass),
-    iam_account_id          bigint NOT NULL,
-    monthly_spend_limit     numeric(14,6), -- USD per calendar month, NULL = no limit.
-    iam_user_id             bigint, -- Who set it last.
-    created_at              timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at              timestamp with time zone NOT NULL DEFAULT now(),
-    CONSTRAINT ai_llm_account_limits_pkey PRIMARY KEY (id),
-    CONSTRAINT ai_llm_account_limits_account_key UNIQUE (iam_account_id),
-    CONSTRAINT ai_llm_account_limits_iam_account_id_fkey FOREIGN KEY (iam_account_id) REFERENCES iam_accounts(id),
-    CONSTRAINT ai_llm_account_limits_iam_user_id_fkey FOREIGN KEY (iam_user_id) REFERENCES iam_users(id)
-);
+-- Account level monthly LLM spend limit, on the account's ai_accounts row.
+ALTER TABLE ai_accounts ADD COLUMN IF NOT EXISTS llm_spending_limit numeric(14,6); -- USD per calendar month, NULL = no limit.
 
 -- Cache prices and the customer facing model name.
 ALTER TABLE ai_llm_models ADD COLUMN IF NOT EXISTS cache_read_price_per_1m numeric(14,6);

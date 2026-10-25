@@ -135,4 +135,21 @@ class PublicModelsTest extends TestCase
         $this->assertSame([['status' => 'failed', 'status_code' => 500, 'latency_ms' => 12]], $meta['attempts']);
         $this->assertStringNotContainsStringIgnoringCase('greenference', json_encode($meta));
     }
+
+    public function test_lines_without_an_sse_field_replace_the_whole_event(): void
+    {
+        $method = new ReflectionMethod(LlmProxyService::class, 'publicChunk');
+        $primary = $this->offer('greenference', 1, 1);
+
+        // A multi-line upstream page: only its first line carries "data:".
+        $chunk = $method->invoke(null, "data: <html>\n<body>greenference gateway error</body>\n</html>\n\n", $primary);
+
+        $this->assertStringNotContainsStringIgnoringCase('greenference', $chunk);
+        $this->assertStringContainsString('upstream_error', $chunk);
+
+        // Comments and SSE fields still pass.
+        $kept = $method->invoke(null, ": keep-alive\nevent: message\nid: 7\ndata: " . json_encode(['model' => 'x']) . "\n\n", $primary);
+        $this->assertStringContainsString(': keep-alive', $kept);
+        $this->assertStringContainsString('id: 7', $kept);
+    }
 }
