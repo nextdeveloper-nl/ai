@@ -43,7 +43,7 @@ class ChatController extends Controller
                     });
 
                     if ($meta) {
-                        $write("event: ai_meta\ndata: " . json_encode($meta) . "\n\n");
+                        $write("event: ai_meta\ndata: " . json_encode(LlmProxyService::publicMeta($meta)) . "\n\n");
                     }
 
                     $write("data: [DONE]\n\n");
@@ -56,7 +56,7 @@ class ChatController extends Controller
 
             [$status, $body, $meta] = LlmProxyService::chat($payload, $key);
 
-            $body['ai_meta'] = $meta;
+            $body['ai_meta'] = LlmProxyService::publicMeta($meta);
 
             return new JsonResponse($body, $status, [
                 'X-Request-Id' => $meta['request_id'],
