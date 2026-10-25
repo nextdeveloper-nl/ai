@@ -107,4 +107,32 @@ class PublicModelsTest extends TestCase
 
         $this->assertSame("data: [DONE]\n\n", $method->invoke(null, "data: [DONE]\n\n", $primary));
     }
+
+    public function test_stream_data_that_is_not_json_is_replaced_not_forwarded(): void
+    {
+        $method = new ReflectionMethod(LlmProxyService::class, 'publicChunk');
+        $primary = $this->offer('greenference', 1, 1);
+
+        $page = $method->invoke(null, "data: <html>greenference gateway error</html>\n\n", $primary);
+        $this->assertStringNotContainsStringIgnoringCase('greenference', $page);
+        $this->assertStringContainsString('upstream_error', $page);
+
+        // Several lines in one event: the model is rewritten wherever it is, the event field is kept.
+        $event = $method->invoke(null, "event: message\ndata: " . json_encode(['model' => 'greenference/x']) . "\ndata: " . json_encode(['error' => ['message' => 'greenference']]) . "\n\n", $primary);
+        $this->assertStringContainsString('event: message', $event);
+        $this->assertStringNotContainsStringIgnoringCase('greenference', $event);
+    }
+
+    public function test_public_meta_hides_provider_model_and_attempt_details(): void
+    {
+        $meta = LlmProxyService::publicMeta([
+            'request_id' => 'r', 'provider' => 'greenference', 'model' => 'greenference/x', 'requested_model' => 'plusclouds/x', 'cost' => 0.1,
+            'attempts' => [['provider' => 'greenference', 'model' => 'greenference/x', 'status' => 'failed', 'status_code' => 500, 'error' => 'greenference down', 'latency_ms' => 12]],
+        ]);
+
+        $this->assertArrayNotHasKey('provider', $meta);
+        $this->assertSame('plusclouds/x', $meta['model']);
+        $this->assertSame([['status' => 'failed', 'status_code' => 500, 'latency_ms' => 12]], $meta['attempts']);
+        $this->assertStringNotContainsStringIgnoringCase('greenference', json_encode($meta));
+    }
 }

@@ -103,30 +103,65 @@ class LlmProxyService
     }
 
     /**
-     * Same as publicAnswer() for one SSE event of a stream.
+     * Same as publicAnswer() for one SSE event of a stream. Every data line is checked: a line that is not
+     * JSON (an upstream error page, say) is replaced by a generic error instead of being passed on, so nothing
+     * unparsed gets through to the caller.
      */
     private static function publicChunk(string $chunk, LlmTarget $primary): string
     {
-        if (!str_starts_with($chunk, 'data:')) {
-            return $chunk;
+        $lines = explode("\n", rtrim($chunk, "\n"));
+
+        foreach ($lines as $i => $line) {
+            if (!str_starts_with($line, 'data:')) {
+                // Other SSE fields (event:, id:, comments) carry no upstream payload.
+                continue;
+            }
+
+            $data = trim(substr($line, 5));
+
+            if ($data === '[DONE]') {
+                continue;
+            }
+
+            $json = json_decode($data, true);
+
+            if (!is_array($json)) {
+                $lines[$i] = 'data: ' . json_encode(self::publicAnswer(502, [], $primary)[1]);
+
+                continue;
+            }
+
+            if (isset($json['error'])) {
+                $code = $json['error']['code'] ?? $json['error']['status'] ?? null;
+                $json = self::publicAnswer(is_numeric($code) ? (int) $code : 502, $json, $primary)[1];
+            } elseif (isset($json['model'])) {
+                $json['model'] = $primary->requestedModel;
+            }
+
+            $lines[$i] = 'data: ' . json_encode($json);
         }
 
-        $json = json_decode(trim(substr($chunk, 5)), true);
+        return implode("\n", $lines) . "\n\n";
+    }
 
-        if (!is_array($json)) {
-            return $chunk;
-        }
+    /**
+     * The usage-log meta as a customer may see it: the requested model instead of provider and upstream model,
+     * and the attempts without who answered or what it said. meta() itself stays complete for in-process callers.
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    public static function publicMeta(array $meta): array
+    {
+        unset($meta['provider']);
 
-        if (isset($json['error'])) {
-            $code = $json['error']['code'] ?? $json['error']['status'] ?? null;
-            [, $json] = self::publicAnswer(is_numeric($code) ? (int) $code : 502, $json, $primary);
-        } elseif (isset($json['model'])) {
-            $json['model'] = $primary->requestedModel;
-        } else {
-            return $chunk;
-        }
+        $meta['model'] = $meta['requested_model'] ?? $meta['model'] ?? null;
+        $meta['attempts'] = array_map(
+            fn ($attempt) => array_intersect_key((array) $attempt, array_flip(['status', 'status_code', 'latency_ms'])),
+            (array) ($meta['attempts'] ?? [])
+        );
 
-        return 'data: ' . json_encode($json) . "\n\n";
+        return $meta;
     }
 
     /**

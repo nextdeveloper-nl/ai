@@ -36,6 +36,8 @@ class LlmUsageLogsTransformer extends AbstractLlmUsageLogsTransformer
             'served_by_fallback' => (bool) $model->served_by_fallback,
             // Customers see the model they asked for, never the provider behind it or what it said.
             'provider'           => null,
+            'ai_llm_provider_id' => null,
+            'upstream_cost'      => null,
             'model'              => $model->requested_model ?? $model->model,
             'error_message'      => $model->error_message ? 'The model could not complete the request.' : null,
             'attempts'           => array_map(
