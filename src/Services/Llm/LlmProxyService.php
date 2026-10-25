@@ -113,8 +113,13 @@ class LlmProxyService
 
         foreach ($lines as $i => $line) {
             if (!str_starts_with($line, 'data:')) {
-                // Other SSE fields (event:, id:, comments) carry no upstream payload.
-                continue;
+                // Only SSE fields and comments pass; any other line is upstream text that came with no field
+                // (the rest of a multi-line page, say), so the whole event is replaced.
+                if ($line === '' || preg_match('/^(event|id|retry):[^\r\n]*$/', $line) || str_starts_with($line, ':')) {
+                    continue;
+                }
+
+                return 'data: ' . json_encode(self::publicAnswer(502, [], $primary)[1]) . "\n\n";
             }
 
             $data = trim(substr($line, 5));
