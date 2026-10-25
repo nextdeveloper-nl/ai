@@ -29,6 +29,7 @@ class OpenAiCompatibleDriver implements LlmDriver
                 'body'          => $body,
                 'input_tokens'  => (int) ($body['usage']['prompt_tokens'] ?? 0),
                 'output_tokens' => (int) ($body['usage']['completion_tokens'] ?? 0),
+                'cache_read_tokens' => (int) ($body['usage']['prompt_tokens_details']['cached_tokens'] ?? 0),
                 'upstream_cost' => $this->reportedCost($body['usage'] ?? [], $response),
             ];
         };
@@ -56,6 +57,7 @@ class OpenAiCompatibleDriver implements LlmDriver
         $ttft = null;
         $input = 0;
         $output = 0;
+        $cacheRead = 0;
         $cost = null;
 
         try {
@@ -96,6 +98,7 @@ class OpenAiCompatibleDriver implements LlmDriver
                     if (is_array($json) && isset($json['usage'])) {
                         $input = (int) ($json['usage']['prompt_tokens'] ?? $input);
                         $output = (int) ($json['usage']['completion_tokens'] ?? $output);
+                        $cacheRead = (int) ($json['usage']['prompt_tokens_details']['cached_tokens'] ?? $cacheRead);
                         $cost = $this->reportedCost($json['usage'], null) ?? $cost;
                     }
                 }
@@ -104,7 +107,7 @@ class OpenAiCompatibleDriver implements LlmDriver
             }
         }
 
-        return ['status' => $response->getStatusCode(), 'input_tokens' => $input, 'output_tokens' => $output, 'ttft_ms' => $ttft, 'upstream_cost' => $cost];
+        return ['status' => $response->getStatusCode(), 'input_tokens' => $input, 'output_tokens' => $output, 'cache_read_tokens' => $cacheRead, 'ttft_ms' => $ttft, 'upstream_cost' => $cost];
     }
 
     /**
@@ -145,21 +148,55 @@ class OpenAiCompatibleDriver implements LlmDriver
                 continue;
             }
 
+            // A model the upstream itself marks as not ready is left out, so the sync switches it off.
+            if (($m['is_ready'] ?? true) === false) {
+                continue;
+            }
+
             $details = $info[$m['id']] ?? [];
-            $in = (float) ($details['input_cost_per_token'] ?? 0);
-            $out = (float) ($details['output_cost_per_token'] ?? 0);
+            $pricing = is_array($m['pricing'] ?? null) ? $m['pricing'] : [];
+
+            // Upstreams that list prices per token on /models (OpenRouter style) win over LiteLLM's /model/info.
+            $in = (float) ($pricing['prompt'] ?? $details['input_cost_per_token'] ?? 0);
+            $out = (float) ($pricing['completion'] ?? $details['output_cost_per_token'] ?? 0);
+            $cacheRead = (float) ($pricing['input_cache_read'] ?? $details['cache_read_input_token_cost'] ?? 0);
+            $cacheWrite = (float) ($pricing['input_cache_write'] ?? $details['cache_creation_input_token_cost'] ?? 0);
 
             $models[] = [
-                'model_id'            => $m['id'],
-                'display_name'        => $m['name'] ?? $m['id'],
-                'input_price_per_1m'  => $in > 0 ? round($in * 1_000_000, 6) : null,
-                'output_price_per_1m' => $out > 0 ? round($out * 1_000_000, 6) : null,
-                'context_window'      => $details['max_input_tokens'] ?? null,
-                'capabilities'        => $this->capabilities($details),
+                'model_id'                => $m['id'],
+                'display_name'            => $m['name'] ?? $m['id'],
+                'input_price_per_1m'      => $in > 0 ? round($in * 1_000_000, 6) : null,
+                'output_price_per_1m'     => $out > 0 ? round($out * 1_000_000, 6) : null,
+                // Cache prices of 0 are real (free cache writes), so only a missing price is null.
+                'cache_read_price_per_1m' => isset($pricing['input_cache_read']) || $cacheRead > 0 ? round($cacheRead * 1_000_000, 6) : null,
+                'cache_write_price_per_1m' => isset($pricing['input_cache_write']) || $cacheWrite > 0 ? round($cacheWrite * 1_000_000, 6) : null,
+                'context_window'          => $m['context_length'] ?? $details['max_input_tokens'] ?? null,
+                'capabilities'            => $this->capabilities($details) + $this->listedCapabilities($m),
             ];
         }
 
         return $models;
+    }
+
+    /**
+     * Capabilities an upstream lists on /models itself (output limit, features, quantization, modalities).
+     *
+     * @param array<string, mixed> $model
+     * @return array<string, mixed>
+     */
+    protected function listedCapabilities(array $model): array
+    {
+        $features = (array) ($model['supported_features'] ?? []);
+
+        return array_filter([
+            'max_output_tokens' => $model['max_output_length'] ?? null,
+            'tools'             => $features ? in_array('tools', $features, true) || in_array('function_calling', $features, true) : null,
+            'json'              => $features ? in_array('json_mode', $features, true) : null,
+            'reasoning'         => $features ? in_array('supports_reasoning', $features, true) : null,
+            'quantization'      => $model['quantization'] ?? null,
+            'input_modalities'  => $model['input_modalities'] ?? null,
+            'output_modalities' => $model['output_modalities'] ?? null,
+        ], fn ($v) => $v !== null);
     }
 
     /**

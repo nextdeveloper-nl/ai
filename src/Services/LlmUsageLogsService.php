@@ -30,7 +30,7 @@ class LlmUsageLogsService extends AbstractLlmUsageLogsService
         $success = ($result['status'] ?? 'failed') === 'success';
 
         // The cost LiteLLM reported for this very call is the most current price; the synced model prices are the fallback.
-        $upstreamCost = $result['upstream_cost'] ?? ($target->pricing ? LlmModelsService::calculateCost($target->pricing, $in, $out) : null);
+        $upstreamCost = $result['upstream_cost'] ?? ($target->pricing ? LlmModelsService::calculateCost($target->pricing, $in, $out, (int) ($result['cache_read_tokens'] ?? 0), (int) ($result['cache_write_tokens'] ?? 0)) : null);
         $billable = $target->isBilled() && $success;
         $cost = $billable && $upstreamCost !== null
             ? round($upstreamCost * (1 + ((float) config('ai.llm.markup_percent', 5)) / 100), 8)
