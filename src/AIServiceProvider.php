@@ -125,6 +125,12 @@ class AIServiceProvider extends AbstractServiceProvider
                     }
                 })
                 ->withoutOverlapping();
+
+            // Chat storage fee: charged for the hour that just ended, every hour on the hour.
+            $this->app->make(\Illuminate\Console\Scheduling\Schedule::class)
+                ->command('ai:llm-charge-chat-storage')
+                ->hourly()
+                ->withoutOverlapping();
         });
     }
 
@@ -135,6 +141,7 @@ class AIServiceProvider extends AbstractServiceProvider
                 \NextDeveloper\AI\Console\Commands\SyncLlmModelsCommand::class,
                 \NextDeveloper\AI\Console\Commands\CreateLlmProviderCommand::class,
                 \NextDeveloper\AI\Console\Commands\SeedHelperAliasesCommand::class,
+                \NextDeveloper\AI\Console\Commands\ChargeChatStorageCommand::class,
             ]);
         }
     }
