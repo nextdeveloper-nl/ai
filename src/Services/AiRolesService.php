@@ -33,23 +33,32 @@ class AiRolesService
 
         $wanted = self::wanted(self::list('default'), self::list('owner'), (int) $account->iam_user_id === (int) $user->id);
         $added = [];
+        $complete = true;
 
         foreach ($wanted as $name) {
             $role = RolesService::getRoleByName($name);
 
             if (!$role) {
                 Log::error("[AI][Roles] The role '{$name}' from ai.roles does not exist; run leo:generate-roles.");
+                $complete = false;
 
                 continue;
             }
 
             if (!self::has($user, $account, (int) $role->id)) {
-                RolesService::assignUserToRole($user, $role, $account);
-                $added[] = $name;
+                if (RolesService::assignUserToRole($user, $role, $account)) {
+                    $added[] = $name;
+                } else {
+                    $complete = false;
+                }
             }
         }
 
-        Cache::put($key, true, now()->addMinutes(self::RECHECK_MINUTES));
+        // Only a check that found everything in place (or put it there) is remembered: a role that could not be
+        // added is tried again on the next request, not an hour later.
+        if ($complete) {
+            Cache::put($key, true, now()->addMinutes(self::RECHECK_MINUTES));
+        }
 
         return $added;
     }
