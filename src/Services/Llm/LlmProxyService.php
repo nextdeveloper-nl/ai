@@ -575,7 +575,7 @@ class LlmProxyService
         $account = AccountingHelper::getAccountFromIamAccountId($key->iam_account_id);
         $estimate = self::estimateCost($target, $payload);
 
-        $available = $account ? CreditHelper::getCredit($account) - LlmUsageLogsService::pendingCost($key->iam_account_id) - $reserved : 0;
+        $available = $account ? CreditHelper::getAvailable($account) - LlmUsageLogsService::pendingCost($key->iam_account_id) - $reserved : 0;
 
         if (!$account || $available <= 0 || $available < $estimate) {
             throw new LlmProxyException('Insufficient credit.', 402, 'insufficient_quota', 'insufficient_credit');
