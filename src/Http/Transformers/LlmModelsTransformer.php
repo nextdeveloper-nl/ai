@@ -28,7 +28,7 @@ class LlmModelsTransformer extends AbstractLlmModelsTransformer
         );
 
         if($transformed) {
-            return $transformed;
+            return $this->forViewer($transformed, $model);
         }
 
         $markup = 1 + ((float) config('ai.llm.markup_percent', 5)) / 100;
@@ -41,10 +41,35 @@ class LlmModelsTransformer extends AbstractLlmModelsTransformer
             'output_price_per_1m_with_markup'    => $withMarkup($model->output_price_per_1m),
         ]);
 
+        // Carbon objects do not survive the cache round trip (they come back as incomplete classes), so dates are cached as text.
+        foreach (['created_at', 'updated_at', 'deleted_at'] as $column) {
+            $transformed[$column] = $transformed[$column]?->toIso8601String();
+        }
+
         Cache::set(
             CacheHelper::getKey('LlmModels', $model->uuid, 'Transformed'),
             $transformed
         );
+
+        return $this->forViewer($transformed, $model);
+    }
+
+    /**
+     * Everybody addresses a model by its public name, admins included.
+     * This runs after the cache because the cached payload is shared between viewers.
+     */
+    private function forViewer(array $transformed, LlmModels $model): array
+    {
+        return self::maskUpstream($transformed, $model->public_id);
+    }
+
+    public static function maskUpstream(array $transformed, ?string $publicId): array
+    {
+        $transformed['public_id'] = $publicId;
+
+        if (!empty($publicId)) {
+            $transformed['model_id'] = $publicId;
+        }
 
         return $transformed;
     }
