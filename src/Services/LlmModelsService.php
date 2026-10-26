@@ -50,12 +50,22 @@ class LlmModelsService extends AbstractLlmModelsService
 
     /**
      * Only ai-admin decides which models are public: a public model is served to every account, so the owner of an
-     * account provider must not be able to publish one. The owner still edits the rest of the model freely.
+     * account provider must not be able to publish one. The owner still edits the rest of the model, but cannot move it to another provider or owner.
      */
     public static function update($id, array $data)
     {
         if (!UserHelper::hasRole('ai-admin')) {
-            unset($data['is_public']);
+            // A model stays with its provider and owner: moving it to a platform provider would serve it to everybody.
+            unset($data['is_public'], $data['ai_llm_provider_id'], $data['iam_account_id'], $data['iam_user_id']);
+
+            $provider = LlmProviders::withoutGlobalScopes()->whereKey(
+                LlmModels::where('uuid', $id)->value('ai_llm_provider_id')
+            )->first();
+
+            throw_if(
+                $provider && $provider->iam_account_id === null,
+                new NotAllowedException('Only ai-admin can change the models of platform providers.')
+            );
         }
 
         return parent::update($id, $data);
