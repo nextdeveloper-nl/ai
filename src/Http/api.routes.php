@@ -228,6 +228,23 @@ Route::prefix('ai')->group(function () {
 
 // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 
+    // Chat history of the logged-in user (IAM token), encrypted at rest and charged per stored MB-hour.
+    Route::prefix('llm/chats')->group(function () {
+        Route::get('settings', 'LlmChats\\LlmChatsController@settings');
+        Route::put('settings', 'LlmChats\\LlmChatsController@updateSettings');
+
+        Route::get('/', 'LlmChats\\LlmChatsController@index');
+        Route::post('/', 'LlmChats\\LlmChatsController@store');
+        Route::delete('/', 'LlmChats\\LlmChatsController@destroyAll');
+
+        Route::get('/{chat}', 'LlmChats\\LlmChatsController@show');
+        Route::patch('/{chat}', 'LlmChats\\LlmChatsController@update');
+        Route::delete('/{chat}', 'LlmChats\\LlmChatsController@destroy');
+
+        Route::post('/{chat}/messages', 'LlmChats\\LlmChatsController@storeMessage');
+        Route::delete('/{chat}/messages/{message}', 'LlmChats\\LlmChatsController@destroyMessage');
+    });
+
 
 });
 

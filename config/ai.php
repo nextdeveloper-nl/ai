@@ -20,6 +20,8 @@ return [
         'public_prefix'      => env('AI_LLM_PUBLIC_PREFIX', 'plusclouds'),
         // Let callers address a model as "provider/model" too. Off: that would reveal the provider.
         'allow_provider_model_ids' => env('AI_LLM_ALLOW_PROVIDER_MODEL_IDS', false),
+        // Chat history: how many of a user's newest messages a content search decrypts and scans.
+        'chat_search_scan_limit' => env('AI_LLM_CHAT_SEARCH_SCAN_LIMIT', 2000),
         // Bring-your-own-key: let accounts add their own upstream providers. Off until BYOK launches.
         'allow_byok'         => env('AI_LLM_ALLOW_BYOK', false),
         // Markup added on top of the upstream cost when charging the account.
