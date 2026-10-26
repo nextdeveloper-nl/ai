@@ -178,6 +178,19 @@ class PublicModelsTest extends TestCase
         $this->assertStringContainsString('belongs to another account', $foreign['detail']);
     }
 
+    public function test_public_models_of_account_providers_are_usable_and_billed(): void
+    {
+        $owned = $this->row(LlmProviders::class, ['id' => 1, 'slug' => 'greenference', 'is_active' => true, 'deleted_at' => null, 'iam_account_id' => 5]);
+        $public = $this->row(LlmModels::class, ['ai_llm_provider_id' => 1, 'model_id' => 'm', 'is_active' => true, 'is_public' => true]);
+        $private = $this->row(LlmModels::class, ['ai_llm_provider_id' => 1, 'model_id' => 'm', 'is_active' => true, 'is_public' => false]);
+
+        $this->assertStringContainsString('usable', ModelResolver::classify([$public], [1 => $owned], [])['detail']);
+        $this->assertStringContainsString('belongs to another account', ModelResolver::classify([$private], [1 => $owned], [])['detail']);
+
+        $this->assertTrue((new LlmTarget($owned, 'm', $public, 'x'))->isBilled());
+        $this->assertFalse((new LlmTarget($owned, 'm', $private, 'x'))->isBilled());
+    }
+
     public function test_errors_tell_the_caller_what_to_do_and_never_name_the_provider(): void
     {
         $method = new ReflectionMethod(LlmProxyService::class, 'publicAnswer');

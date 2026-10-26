@@ -112,7 +112,7 @@ class ModelResolver
     }
 
     /**
-     * Every active offer of a public model id from providers the account may use, cheapest first. Price is the
+     * Every active offer of a public model id, cheapest first: from providers the account may use, plus models marked is_public. Price is the
      * blended input/output price (input counts three times: calls are mostly input); unpriced offers go last.
      *
      * @return array<int, LlmTarget>
@@ -125,10 +125,17 @@ class ModelResolver
             ->get();
 
         $providers = self::usableProviders($accountId)->keyBy('id');
+        $publicProviders = LlmProviders::withoutGlobalScopes()
+            ->where('is_active', true)
+            ->whereIn('id', $models->where('is_public', true)->pluck('ai_llm_provider_id'))
+            ->get()
+            ->keyBy('id');
         $offers = [];
 
         foreach ($models as $model) {
-            if ($provider = $providers->get($model->ai_llm_provider_id)) {
+            $provider = $providers->get($model->ai_llm_provider_id) ?? ($model->is_public ? $publicProviders->get($model->ai_llm_provider_id) : null);
+
+            if ($provider) {
                 $offers[] = new LlmTarget($provider, $model->model_id, $model, $requested ?? $publicId, $alias?->alias, $alias, $publicId);
             }
         }
@@ -137,8 +144,8 @@ class ModelResolver
     }
 
     /**
-     * The non-deleted models with a public id that the account may know about: those of platform providers and of its
-     * own providers. A model of another account's provider must look exactly like an id that does not exist.
+     * The non-deleted models with a public id that the account may know about: public models, those of platform
+     * providers and of its own providers. A model of another account's provider must look exactly like an id that does not exist.
      *
      * @return \Illuminate\Database\Eloquent\Builder<LlmModels>
      */
@@ -147,9 +154,9 @@ class ModelResolver
         return LlmModels::withoutGlobalScopes()
             ->where('public_id', $publicId)
             ->whereNull('deleted_at')
-            ->whereIn('ai_llm_provider_id', LlmProviders::withoutGlobalScopes()
+            ->where(fn ($q) => $q->where('is_public', true)->orWhereIn('ai_llm_provider_id', LlmProviders::withoutGlobalScopes()
                 ->where(fn ($q) => $q->whereNull('iam_account_id')->orWhere('iam_account_id', $accountId))
-                ->select('id'));
+                ->select('id')));
     }
 
     /**
@@ -207,7 +214,7 @@ class ModelResolver
                 !$provider                       => "{$m->model_id}: provider row is missing",
                 $provider->deleted_at !== null   => "{$m->model_id}: provider '{$provider->slug}' is deleted",
                 !$provider->is_active            => "{$m->model_id}: provider '{$provider->slug}' is inactive",
-                !in_array($provider->id, $usableProviderIds, true) => "{$m->model_id}: provider '{$provider->slug}' belongs to another account",
+                !$m->is_public && !in_array($provider->id, $usableProviderIds, true) => "{$m->model_id}: provider '{$provider->slug}' belongs to another account",
                 default                          => "{$m->model_id}: usable",
             };
         }, $active);

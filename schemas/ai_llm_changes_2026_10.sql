@@ -53,3 +53,6 @@ ALTER TABLE ai_llm_models ADD COLUMN IF NOT EXISTS cache_read_price_per_1m numer
 ALTER TABLE ai_llm_models ADD COLUMN IF NOT EXISTS cache_write_price_per_1m numeric(14,6);
 ALTER TABLE ai_llm_models ADD COLUMN IF NOT EXISTS public_id text;
 CREATE INDEX IF NOT EXISTS idx_ai_llm_models_public_id ON ai_llm_models USING btree (public_id) WHERE deleted_at IS NULL;
+
+-- Models anybody may use, even when the provider belongs to an account.
+ALTER TABLE ai_llm_models ADD COLUMN IF NOT EXISTS is_public boolean NOT NULL DEFAULT false;

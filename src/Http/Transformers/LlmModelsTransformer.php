@@ -36,6 +36,7 @@ class LlmModelsTransformer extends AbstractLlmModelsTransformer
 
         // Prices with the markup an account is charged on platform models; the plain columns stay the upstream price.
         $transformed = array_merge(parent::transform($model), [
+            'is_public'                          => (bool) $model->is_public,
             'markup_percent'                     => (float) config('ai.llm.markup_percent', 5),
             'input_price_per_1m_with_markup'     => $withMarkup($model->input_price_per_1m),
             'output_price_per_1m_with_markup'    => $withMarkup($model->output_price_per_1m),

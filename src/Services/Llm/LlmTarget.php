@@ -47,11 +47,12 @@ class LlmTarget
     }
 
     /**
-     * Account-owned providers use the account's own upstream key (BYOK), so we never charge for them.
+     * Account-owned providers use the account's own upstream key (BYOK), so we never charge for them, except for
+     * their public models: everybody else pays for those.
      */
     public function isBilled(): bool
     {
-        return $this->provider->iam_account_id === null;
+        return $this->provider->iam_account_id === null || (bool) $this->pricing?->is_public;
     }
 
     public function driver(): LlmDriver

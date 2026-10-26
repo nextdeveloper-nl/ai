@@ -17,6 +17,7 @@ CREATE TABLE ai_llm_models (
     context_window          integer,
     capabilities            json,
     is_active               boolean NOT NULL DEFAULT true,
+    is_public               boolean NOT NULL DEFAULT false, -- Anybody may use the model, even when its provider belongs to an account. Customers pay for it.
     iam_account_id          bigint,
     iam_user_id             bigint,
     created_at              timestamp with time zone NOT NULL DEFAULT now(),
