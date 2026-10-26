@@ -1,6 +1,8 @@
 -- PostgreSQL
 -- Server-side chat history of the logged-in users' LLM chat (POST /ai/llm/chat). Message text is stored encrypted
--- (APP_KEY); the account pays a storage fee per hour for the encrypted bytes it keeps.
+-- (APP_KEY). Whether a chat is kept is decided when it is created (request field "keep", else the account default in
+-- ai_accounts.configuration -> llm_chat.keep_history). The storage fee is not charged here: the billing service reads
+-- content_bytes per account and writes accounting_usage_events.
 
 CREATE SEQUENCE IF NOT EXISTS ai_llm_chats_id_seq;
 
@@ -37,7 +39,7 @@ CREATE TABLE IF NOT EXISTS ai_llm_chat_messages (
     reasoning_encrypted text,
     meta                json, -- Whitelisted: model (public), requested, promptTokens, completionTokens, latencyMs, servedByFallback, cost, requestId, error (code only).
     position            integer NOT NULL, -- Order inside the chat.
-    content_bytes       integer NOT NULL DEFAULT 0, -- Stored size (encrypted content + reasoning), what the storage fee is charged on.
+    content_bytes       integer NOT NULL DEFAULT 0, -- Stored size (encrypted content + reasoning), what the billing service meters.
     created_at          timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT ai_llm_chat_messages_pkey PRIMARY KEY (id),
     CONSTRAINT ai_llm_chat_messages_chat_fkey FOREIGN KEY (ai_llm_chat_id) REFERENCES ai_llm_chats(id) ON DELETE CASCADE,
@@ -45,40 +47,3 @@ CREATE TABLE IF NOT EXISTS ai_llm_chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ai_llm_chat_messages_uuid ON ai_llm_chat_messages USING btree (uuid);
-
--- Whether a user wants their chats kept on the server. Off until the user turns it on (it costs a storage fee).
-CREATE SEQUENCE IF NOT EXISTS ai_llm_chat_settings_id_seq;
-
-CREATE TABLE IF NOT EXISTS ai_llm_chat_settings (
-    id                  bigint NOT NULL DEFAULT nextval('ai_llm_chat_settings_id_seq'::regclass),
-    iam_user_id         bigint NOT NULL,
-    iam_account_id      bigint NOT NULL,
-    keep_history        boolean NOT NULL DEFAULT false,
-    created_at          timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at          timestamp with time zone NOT NULL DEFAULT now(),
-    CONSTRAINT ai_llm_chat_settings_pkey PRIMARY KEY (id),
-    CONSTRAINT ai_llm_chat_settings_user_key UNIQUE (iam_user_id),
-    CONSTRAINT ai_llm_chat_settings_iam_user_id_fkey FOREIGN KEY (iam_user_id) REFERENCES iam_users(id),
-    CONSTRAINT ai_llm_chat_settings_iam_account_id_fkey FOREIGN KEY (iam_account_id) REFERENCES iam_accounts(id)
-);
-
--- One row per account and hour that was charged (or could not be): the unique key makes the hourly job safe to repeat.
-CREATE SEQUENCE IF NOT EXISTS ai_llm_chat_storage_charges_id_seq;
-
-CREATE TABLE IF NOT EXISTS ai_llm_chat_storage_charges (
-    id                  bigint NOT NULL DEFAULT nextval('ai_llm_chat_storage_charges_id_seq'::regclass),
-    iam_account_id      bigint NOT NULL,
-    hour_start          timestamp with time zone NOT NULL,
-    stored_bytes        bigint NOT NULL,
-    price_per_mb_hour   numeric(14,6) NOT NULL,
-    amount              numeric(14,8) NOT NULL, -- USD
-    billed              boolean NOT NULL DEFAULT false,
-    accounting_credit_transaction_id bigint,
-    created_at          timestamp with time zone NOT NULL DEFAULT now(),
-    CONSTRAINT ai_llm_chat_storage_charges_pkey PRIMARY KEY (id),
-    CONSTRAINT ai_llm_chat_storage_charges_account_hour_key UNIQUE (iam_account_id, hour_start),
-    CONSTRAINT ai_llm_chat_storage_charges_iam_account_id_fkey FOREIGN KEY (iam_account_id) REFERENCES iam_accounts(id)
-);
-
--- Set while the account could not pay the storage fee: chats are read-only, and deleted once the grace period is over.
-ALTER TABLE ai_accounts ADD COLUMN IF NOT EXISTS llm_chat_unpaid_since timestamp with time zone;

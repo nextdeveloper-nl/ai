@@ -7,7 +7,6 @@ use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Facades\Facade;
 use NextDeveloper\AI\Helpers\LlmKeyHelper;
 use NextDeveloper\AI\Services\LlmChatHistoryService;
-use NextDeveloper\AI\Services\LlmChatStorageBilling;
 use PHPUnit\Framework\TestCase;
 
 class ChatHistoryTest extends TestCase
@@ -71,13 +70,13 @@ class ChatHistoryTest extends TestCase
         $this->assertFalse(LlmChatHistoryService::contains('hello', 'world'));
     }
 
-    public function test_storage_fee_is_charged_on_stored_megabytes_per_hour(): void
+    public function test_the_account_default_comes_from_its_configuration(): void
     {
-        // 10 MB at 0.002 per MB-hour.
-        $this->assertSame('0.02000000', LlmChatStorageBilling::amountFor(10 * 1048576, '0.002'));
-        // 1 KB at the same price is a fraction of a cent; rounded down, never up.
-        $this->assertSame('0.00000195', LlmChatStorageBilling::amountFor(1024, '0.002'));
-        $this->assertSame('0.00000000', LlmChatStorageBilling::amountFor(0, '0.002'));
-        $this->assertSame('0.00000000', LlmChatStorageBilling::amountFor(-5, '0.002'));
+        $this->assertTrue(LlmChatHistoryService::keepFromConfiguration('{"llm_chat":{"keep_history":true},"other":1}'));
+        $this->assertTrue(LlmChatHistoryService::keepFromConfiguration(['llm_chat' => ['keep_history' => true]]));
+        $this->assertFalse(LlmChatHistoryService::keepFromConfiguration('{"llm_chat":{"keep_history":false}}'));
+        $this->assertFalse(LlmChatHistoryService::keepFromConfiguration('{"assistants":{}}'), 'Off unless the account turned it on.');
+        $this->assertFalse(LlmChatHistoryService::keepFromConfiguration(null));
+        $this->assertFalse(LlmChatHistoryService::keepFromConfiguration('not json'));
     }
 }

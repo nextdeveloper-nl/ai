@@ -6,15 +6,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use NextDeveloper\AI\Database\Models\LlmChatMessages;
 use NextDeveloper\AI\Database\Models\LlmChats;
-use NextDeveloper\AI\Database\Models\LlmChatSettings;
 use NextDeveloper\AI\Helpers\LlmKeyHelper;
 use NextDeveloper\AI\Services\Llm\LlmProxyException;
+use NextDeveloper\Accounting\Helpers\AccountingHelper;
+use NextDeveloper\Accounting\Helpers\CreditHelper;
+use NextDeveloper\Commons\Exceptions\NotAllowedException;
 use NextDeveloper\IAM\Helpers\UserHelper;
 
 /**
  * Server-side chat history of the logged-in user. Every query is scoped to the session user, so a user can never
- * reach the chats of anybody else, not even in the same account. Message text and the system prompt are encrypted;
- * what the account keeps is paid for per hour (see LlmChatStorageBilling).
+ * reach the chats of anybody else, not even in the same account. Message text and the system prompt are encrypted.
+ * Whether a chat is kept is decided when it is created (see create()); the storage fee is metered by the billing
+ * service from LlmChatStorage, not charged here.
  */
 class LlmChatHistoryService
 {
@@ -31,68 +34,80 @@ class LlmChatHistoryService
         return ['user' => UserHelper::me()->id, 'account' => UserHelper::currentAccount()->id];
     }
 
-    public static function keepHistory(int $userId): bool
+    /**
+     * The account's default for new chats: ai_accounts.configuration -> llm_chat.keep_history, off when unset.
+     */
+    public static function accountDefault(int $accountId): bool
     {
-        return (bool) LlmChatSettings::where('iam_user_id', $userId)->value('keep_history');
+        return self::keepFromConfiguration(DB::table('ai_accounts')->where('iam_account_id', $accountId)->whereNull('deleted_at')->value('configuration'));
+    }
+
+    public static function keepFromConfiguration(mixed $configuration): bool
+    {
+        $configuration = is_string($configuration) ? json_decode($configuration, true) : $configuration;
+
+        return (bool) ($configuration['llm_chat']['keep_history'] ?? false);
     }
 
     /**
-     * @return array{keep_history: bool, storage_unpaid: bool, price_per_mb_hour: string, stored_bytes: int}
+     * @return array{keep_history: bool, stored_bytes: int}
      */
     public static function settings(): array
     {
         $owner = self::owner();
 
-        return [
-            'keep_history'      => self::keepHistory($owner['user']),
-            'storage_unpaid'    => LlmChatStorageBilling::isUnpaid($owner['account']),
-            'price_per_mb_hour' => (string) config('ai.llm.chat_storage_price_per_mb_hour', '0'),
-            'stored_bytes'      => LlmChatStorageBilling::storedBytes($owner['account']),
-        ];
+        return ['keep_history' => self::accountDefault($owner['account']), 'stored_bytes' => LlmChatStorage::storedBytes($owner['account'])];
     }
 
     /**
-     * Turns history on or off. Turning it off can also delete what is kept, so the fee stops.
+     * Sets the account default for new chats. A chat can still say otherwise when it is created.
      *
-     * @return array<string, mixed>
+     * @return array{keep_history: bool, stored_bytes: int}
+     *
+     * @throws NotAllowedException
      */
-    public static function updateSettings(bool $keepHistory, bool $deleteExisting = false): array
+    public static function updateSettings(bool $keepHistory): array
     {
         $owner = self::owner();
 
-        LlmChatSettings::updateOrCreate(
-            ['iam_user_id' => $owner['user']],
-            ['iam_account_id' => $owner['account'], 'keep_history' => $keepHistory]
+        throw_if(
+            !UserHelper::hasRole('ai-manager') && !UserHelper::hasRole('ai-admin'),
+            new NotAllowedException('You need the ai-manager role to change the chat history default of the account.')
         );
 
-        if (!$keepHistory && $deleteExisting) {
-            self::clearAll();
-        }
+        DB::transaction(function () use ($owner, $keepHistory) {
+            // Lock the row: the assistant settings of the application live in the same column.
+            $row = DB::table('ai_accounts')->where('iam_account_id', $owner['account'])->whereNull('deleted_at')->lockForUpdate()->first();
+            $configuration = $row ? (json_decode((string) $row->configuration, true) ?: []) : [];
+            $configuration['llm_chat']['keep_history'] = $keepHistory;
+
+            if ($row) {
+                DB::table('ai_accounts')->where('id', $row->id)->update(['configuration' => json_encode($configuration), 'updated_at' => now()]);
+            } else {
+                DB::table('ai_accounts')->insert([
+                    'uuid' => (string) Str::uuid(), 'iam_account_id' => $owner['account'], 'configuration' => json_encode($configuration),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+        });
 
         return self::settings();
     }
 
     /**
-     * New chats and messages need history to be switched on and the storage fee to be paid. Reading, renaming and
-     * deleting always work, so nobody is locked out of their own data.
+     * Storing needs credit, because the account pays for the storage. Reading, renaming and deleting always work,
+     * so nobody is locked out of their own data.
      *
      * @throws LlmProxyException
      */
     public static function assertCanStore(): void
     {
-        $owner = self::owner();
+        $account = AccountingHelper::getAccountFromIamAccountId(self::owner()['account']);
 
-        if (!self::keepHistory($owner['user'])) {
+        if (!$account || CreditHelper::getCredit($account) <= 0) {
             throw new LlmProxyException(
-                'Chat history is switched off. Turn on "keep chat history" in your chat settings to store chats on the server.',
-                409, 'invalid_request_error', 'chat_history_disabled'
-            );
-        }
-
-        if (LlmChatStorageBilling::isUnpaid($owner['account'])) {
-            throw new LlmProxyException(
-                'Your account could not pay the chat storage fee, so stored chats are read-only. Add credit to store new messages; unpaid chats are deleted after the grace period.',
-                402, 'insufficient_quota', 'chat_storage_unpaid'
+                'Storing chats is paid by the hour and your account has no credit. Add credit to keep new chats; the ones you already have stay readable.',
+                402, 'insufficient_quota', 'chat_storage_no_credit'
             );
         }
     }
@@ -131,8 +146,16 @@ class LlmChatHistoryService
      */
     public static function create(array $data): array
     {
-        self::assertCanStore();
         $owner = self::owner();
+
+        // Kept or not is decided here, when the chat starts: the request says so, else the account default does.
+        $keep = array_key_exists('keep', $data) && $data['keep'] !== null ? (bool) $data['keep'] : self::accountDefault($owner['account']);
+
+        if (!$keep) {
+            return ['saved' => false];
+        }
+
+        self::assertCanStore();
 
         $chat = LlmChats::create([
             'iam_user_id'      => $owner['user'],
@@ -144,7 +167,7 @@ class LlmChatHistoryService
             'max_tokens'       => $data['max_tokens'] ?? null,
         ]);
 
-        return self::present($chat) + ['message_count' => 0, 'last_message' => null, 'messages' => []];
+        return ['saved' => true] + self::present($chat) + ['message_count' => 0, 'last_message' => null, 'messages' => []];
     }
 
     /**

@@ -24,6 +24,7 @@ class LlmChatsController extends Controller
     {
         return $this->respond(function () use ($request) {
             return LlmChatHistoryService::create($this->validated($request, [
+                'keep'        => 'nullable|boolean',
                 'title'       => 'nullable|string|max:200',
                 'model'       => 'nullable|string|max:200',
                 'system'      => 'nullable|string',
@@ -94,9 +95,9 @@ class LlmChatsController extends Controller
     public function updateSettings(Request $request): JsonResponse
     {
         return $this->respond(function () use ($request) {
-            $data = $this->validated($request, ['keep_history' => 'required|boolean', 'delete_existing' => 'nullable|boolean']);
+            $data = $this->validated($request, ['keep_history' => 'required|boolean']);
 
-            return LlmChatHistoryService::updateSettings((bool) $data['keep_history'], (bool) ($data['delete_existing'] ?? false));
+            return LlmChatHistoryService::updateSettings((bool) $data['keep_history']);
         });
     }
 
