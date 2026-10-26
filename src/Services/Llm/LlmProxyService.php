@@ -249,6 +249,7 @@ class LlmProxyService
                 'ttft_ms'            => $result['ttft_ms'],
                 'upstream_cost'      => $result['upstream_cost'] ?? null,
                 'stream'             => true,
+                'error_message'      => $result['status'] < 400 ? null : ($result['error_message'] ?? null),
                 'attempts'           => $attempts,
                 'served_by_fallback' => $i > 0,
             ]);
@@ -306,6 +307,7 @@ class LlmProxyService
     {
         $alias = $target->aliasRecord;
         $payload['model'] = $target->model;
+        $payload['messages'] = self::withoutEmptyMessages($payload['messages']);
 
         if ($alias) {
             if ($alias->temperature !== null && !isset($payload['temperature'])) {
@@ -322,6 +324,29 @@ class LlmProxyService
         }
 
         return $payload;
+    }
+
+    /**
+     * Upstreams refuse a message with neither content nor tool calls. Reasoning models do send such answers (the
+     * whole token budget went into reasoning), and chat clients send them back in the history, so they are left out.
+     * The conversation is sent as it is when nothing would be left.
+     *
+     * @param array<int, mixed> $messages
+     * @return array<int, mixed>
+     */
+    public static function withoutEmptyMessages(array $messages): array
+    {
+        $kept = array_values(array_filter($messages, function ($message): bool {
+            if (!is_array($message) || !empty($message['tool_calls']) || !empty($message['function_call']) || ($message['role'] ?? null) === 'tool') {
+                return true;
+            }
+
+            $content = $message['content'] ?? null;
+
+            return !(is_array($content) ? $content === [] : trim((string) $content) === '');
+        }));
+
+        return $kept ?: $messages;
     }
 
     /**

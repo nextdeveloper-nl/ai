@@ -191,6 +191,20 @@ class PublicModelsTest extends TestCase
         $this->assertFalse((new LlmTarget($owned, 'm', $private, 'x'))->isBilled());
     }
 
+    public function test_empty_messages_are_left_out_of_the_conversation(): void
+    {
+        $user = ['role' => 'user', 'content' => 'what is your name ?'];
+        $call = ['role' => 'assistant', 'content' => null, 'tool_calls' => [['id' => 'a']]];
+        $result = ['role' => 'tool', 'content' => '', 'tool_call_id' => 'a'];
+
+        $this->assertSame(
+            [$user, ['role' => 'user', 'content' => 'and who made you?']],
+            LlmProxyService::withoutEmptyMessages([$user, ['role' => 'assistant', 'content' => ''], ['role' => 'assistant', 'content' => null], ['role' => 'assistant', 'content' => '  '], ['role' => 'user', 'content' => 'and who made you?']])
+        );
+        $this->assertSame([$user, $call, $result], LlmProxyService::withoutEmptyMessages([$user, $call, $result]));
+        $this->assertSame([['role' => 'user', 'content' => '']], LlmProxyService::withoutEmptyMessages([['role' => 'user', 'content' => '']]));
+    }
+
     public function test_errors_tell_the_caller_what_to_do_and_never_name_the_provider(): void
     {
         $method = new ReflectionMethod(LlmProxyService::class, 'publicAnswer');

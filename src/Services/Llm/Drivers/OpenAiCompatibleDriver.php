@@ -74,7 +74,11 @@ class OpenAiCompatibleDriver implements LlmDriver
                         // Never forward the upstream body: it can be a multi-line page that names the provider.
             $onChunk('data: ' . json_encode(['error' => ['message' => 'Upstream error.', 'code' => $response->getStatusCode()]]) . "\n\n");
 
-            return ['status' => $response->getStatusCode(), 'input_tokens' => 0, 'output_tokens' => 0, 'ttft_ms' => null, 'upstream_cost' => null];
+            // The body never goes to the caller, but the usage log keeps the upstream's own reason.
+            $body = json_decode((string) $response->getBody(), true);
+            $reason = is_array($body) ? ($body['error']['message'] ?? $body['message'] ?? null) : null;
+
+            return ['status' => $response->getStatusCode(), 'input_tokens' => 0, 'output_tokens' => 0, 'ttft_ms' => null, 'upstream_cost' => null, 'error_message' => $reason ? mb_substr((string) (is_string($reason) ? $reason : json_encode($reason)), 0, 500) : null];
         }
 
         $cost = $this->reportedCost([], $response);
