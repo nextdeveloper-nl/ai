@@ -12,6 +12,14 @@ return [
         ]
     ],
 
+    // Roles the AI endpoints make sure a logged-in user has, adding the missing ones before the request is authorized.
+    'roles' => [
+        // Everybody who uses the AI endpoints.
+        'default' => ['ai-user'],
+        // The owner of the account, on top of the default ones.
+        'owner'   => ['ai-manager'],
+    ],
+
     // LLM proxy settings (providers, aliases, broadcasts, api keys, usage).
     'llm' => [
         // Cron of ai:llm-sync, which refreshes the models and prices of every active platform provider.
