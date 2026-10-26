@@ -205,6 +205,19 @@ class PublicModelsTest extends TestCase
         $this->assertSame([['role' => 'user', 'content' => '']], LlmProxyService::withoutEmptyMessages([['role' => 'user', 'content' => '']]));
     }
 
+    public function test_models_stream_unless_an_admin_switched_it_off(): void
+    {
+        $provider = $this->row(LlmProviders::class, ['id' => 1, 'slug' => 'greenference']);
+        $canStream = new ReflectionMethod(LlmProxyService::class, 'canStream');
+        $target = fn (?array $capabilities) => new LlmTarget($provider, 'm', $this->row(LlmModels::class, ['capabilities' => $capabilities === null ? null : json_encode($capabilities)]), 'x');
+
+        $this->assertTrue($canStream->invoke(null, $target(null)));
+        $this->assertTrue($canStream->invoke(null, $target(['tools' => true])));
+        $this->assertTrue($canStream->invoke(null, $target(['streaming' => true])));
+        $this->assertFalse($canStream->invoke(null, $target(['streaming' => false])));
+        $this->assertTrue($canStream->invoke(null, new LlmTarget($provider, 'm', null, 'x')));
+    }
+
     public function test_errors_tell_the_caller_what_to_do_and_never_name_the_provider(): void
     {
         $method = new ReflectionMethod(LlmProxyService::class, 'publicAnswer');
