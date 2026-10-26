@@ -107,6 +107,16 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
             'ai_llm_api_keys:delete',
 
             'ai_llm_usage_logs:read',
+
+            'ai_llm_chats:read',
+            'ai_llm_chats:create',
+            'ai_llm_chats:update',
+            'ai_llm_chats:delete',
+
+            'ai_llm_chat_messages:read',
+            'ai_llm_chat_messages:create',
+            'ai_llm_chat_messages:update',
+            'ai_llm_chat_messages:delete',
         ];
     }
 
