@@ -180,6 +180,11 @@ class LlmProxyService
     {
         $primary = self::preflight($payload, $key);
         $emitRaw = $emit;
+
+        if (!self::canStream($primary)) {
+            return self::streamFromChat($payload, $key, $emitRaw);
+        }
+
         $emit = fn (string $chunk) => $emitRaw(self::publicChunk($chunk, $primary));
         $chain = self::chain($primary, $key, $payload);
         $requestId = (string) Str::uuid();
@@ -258,6 +263,52 @@ class LlmProxyService
         }
 
         return null;
+    }
+
+    /**
+     * Models are streamed unless an admin switched it off with capabilities.streaming = false.
+     */
+    private static function canStream(LlmTarget $target): bool
+    {
+        return ($target->pricing?->capabilities['streaming'] ?? true) !== false;
+    }
+
+    /**
+     * Answers a streaming request of a model that cannot stream: the normal answer, sent as a stream of one chunk,
+     * so clients that read server-sent events keep working.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function streamFromChat(array $payload, LlmApiKeys $key, callable $emit): ?array
+    {
+        $payload['stream'] = false;
+        [$status, $body, $meta] = self::chat($payload, $key);
+
+        if ($status >= 400) {
+            $emit('data: ' . json_encode($body) . "\n\n");
+            $emit("data: [DONE]\n\n");
+
+            return $meta;
+        }
+
+        $choice = $body['choices'][0] ?? [];
+        $message = $choice['message'] ?? [];
+
+        $emit('data: ' . json_encode([
+            'id'      => $body['id'] ?? null,
+            'object'  => 'chat.completion.chunk',
+            'created' => $body['created'] ?? time(),
+            'model'   => $body['model'] ?? $payload['model'],
+            'choices' => [[
+                'index'         => 0,
+                'delta'         => array_filter(['role' => 'assistant', 'content' => $message['content'] ?? null, 'reasoning_content' => $message['reasoning_content'] ?? null, 'tool_calls' => $message['tool_calls'] ?? null], fn ($v) => $v !== null),
+                'finish_reason' => $choice['finish_reason'] ?? 'stop',
+            ]],
+            'usage'   => $body['usage'] ?? null,
+        ]) . "\n\n");
+        $emit("data: [DONE]\n\n");
+
+        return $meta;
     }
 
     /**
