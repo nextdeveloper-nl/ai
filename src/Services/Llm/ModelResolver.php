@@ -2,6 +2,7 @@
 
 namespace NextDeveloper\AI\Services\Llm;
 
+use Illuminate\Support\Facades\Log;
 use NextDeveloper\AI\Database\Models\LlmAliases;
 use NextDeveloper\AI\Database\Models\LlmModels;
 use NextDeveloper\AI\Database\Models\LlmProviders;
@@ -31,7 +32,7 @@ class ModelResolver
                 $offers = self::offers(self::publicPrefix() . '/' . $alias->target_model, $accountId, $requested, $alias);
 
                 if (!$offers) {
-                    throw new LlmProxyException("The model '{$requested}' is not available.", 404, 'invalid_request_error', 'model_not_found');
+                    throw self::unavailable($requested, self::publicPrefix() . '/' . $alias->target_model, $accountId, true);
                 }
 
                 return $offers[0]->withAlternates(array_slice($offers, 1));
@@ -53,7 +54,15 @@ class ModelResolver
             return self::resolveProviderModel($providerSlug, $modelId, $accountId, $requested);
         }
 
-        throw new LlmProxyException("The model '{$requested}' does not exist or is not an alias of this account.", 404, 'invalid_request_error', 'model_not_found');
+        // A public id that exists but cannot be served says why; anything else is simply unknown.
+        if (self::visibleModels($requested, $accountId)->exists()) {
+            throw self::unavailable($requested, $requested, $accountId, false);
+        }
+
+        throw new LlmProxyException(
+            "The model '{$requested}' does not exist. List the models and aliases you can use with GET /ai/v1/models.",
+            404, 'invalid_request_error', 'model_not_found'
+        );
     }
 
     /**
@@ -65,13 +74,23 @@ class ModelResolver
         $requested ??= $providerSlug . '/' . $modelId;
 
         if (!$providerSlug || !$modelId) {
-            throw new LlmProxyException("The model '{$requested}' does not exist or is not an alias of this account.", 404, 'invalid_request_error', 'model_not_found');
+            Log::warning('[AI][ModelResolver] Alias target is incomplete.', ['requested' => $requested, 'alias' => $alias?->alias, 'target_provider' => $providerSlug, 'target_model' => $modelId]);
+
+            throw new LlmProxyException(
+                "The alias '{$requested}' is not set up completely: it has no model to run. Contact support.",
+                404, 'invalid_request_error', 'alias_misconfigured'
+            );
         }
 
         $provider = self::findProvider($providerSlug, $accountId);
 
         if (!$provider) {
-            throw new LlmProxyException("The model '{$requested}' is not available.", 404, 'invalid_request_error', 'provider_not_found');
+            Log::warning('[AI][ModelResolver] No usable provider for the target.', ['requested' => $requested, 'provider' => $providerSlug, 'model' => $modelId, 'account' => $accountId]);
+
+            throw new LlmProxyException(
+                $alias ? "The alias '{$requested}' exists, but the model it points to is not available right now. Try again later." : "The model '{$requested}' is not available right now. Try again later.",
+                404, 'invalid_request_error', $alias ? 'alias_target_unavailable' : 'model_unavailable'
+            );
         }
 
         $pricing = LlmModels::withoutGlobalScopes()
@@ -80,7 +99,10 @@ class ModelResolver
             ->first();
 
         if ($pricing && !$pricing->is_active) {
-            throw new LlmProxyException("The model '{$requested}' is disabled.", 404, 'invalid_request_error', 'model_disabled');
+            throw new LlmProxyException(
+                $alias ? "The alias '{$requested}' exists, but the model it points to is disabled." : "The model '{$requested}' is disabled and cannot be used.",
+                404, 'invalid_request_error', 'model_disabled'
+            );
         }
 
         // Platform calls are billed from the upstream cost or the synced prices; the charge job refuses to bill
@@ -112,6 +134,85 @@ class ModelResolver
         }
 
         return self::cheapestFirst($offers);
+    }
+
+    /**
+     * The non-deleted models with a public id that the account may know about: those of platform providers and of its
+     * own providers. A model of another account's provider must look exactly like an id that does not exist.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<LlmModels>
+     */
+    private static function visibleModels(string $publicId, int $accountId)
+    {
+        return LlmModels::withoutGlobalScopes()
+            ->where('public_id', $publicId)
+            ->whereNull('deleted_at')
+            ->whereIn('ai_llm_provider_id', LlmProviders::withoutGlobalScopes()
+                ->where(fn ($q) => $q->whereNull('iam_account_id')->orWhere('iam_account_id', $accountId))
+                ->select('id'));
+    }
+
+    /**
+     * Why a public model cannot be served right now. The customer is told what is wrong with the model or alias they
+     * used (never which provider is behind it); the exact cause, with provider names, goes to the log.
+     */
+    private static function unavailable(string $requested, string $publicId, int $accountId, bool $viaAlias): LlmProxyException
+    {
+        $models = self::visibleModels($publicId, $accountId)->get();
+        $providers = LlmProviders::withoutGlobalScopes()->whereIn('id', $models->pluck('ai_llm_provider_id'))->get()->keyBy('id');
+        $usable = self::usableProviders($accountId)->pluck('id')->all();
+
+        $reason = self::classify($models->all(), $providers->all(), $usable);
+
+        Log::warning('[AI][ModelResolver] Public model cannot be served.', [
+            'requested' => $requested, 'public_id' => $publicId, 'account' => $accountId, 'reason' => $reason['code'], 'detail' => $reason['detail'],
+        ]);
+
+        $subject = $viaAlias ? "The alias '{$requested}' exists, but the model it points to" : "The model '{$requested}'";
+
+        return match ($reason['code']) {
+            'no_model' => new LlmProxyException(
+                $viaAlias ? "The alias '{$requested}' exists, but the model it points to does not exist (any more). Contact support." : "The model '{$requested}' does not exist. List the models and aliases you can use with GET /ai/v1/models.",
+                404, 'invalid_request_error', $viaAlias ? 'alias_target_unavailable' : 'model_not_found'
+            ),
+            'model_disabled' => new LlmProxyException("{$subject} is disabled and cannot be used.", 404, 'invalid_request_error', 'model_disabled'),
+            default => new LlmProxyException("{$subject} is not available right now. Try again later; if it keeps happening, contact support.", 404, 'invalid_request_error', $viaAlias ? 'alias_target_unavailable' : 'model_unavailable'),
+        };
+    }
+
+    /**
+     * Sorts out why none of the models of a public id can be served.
+     *
+     * @param array<int, LlmModels> $models        every non-deleted model row with the public id
+     * @param array<int, LlmProviders> $providers  their providers by id
+     * @param array<int, int> $usableProviderIds   ids of the providers the account may use
+     * @return array{code: string, detail: string}  code: no_model | model_disabled | provider_unavailable
+     */
+    public static function classify(array $models, array $providers, array $usableProviderIds): array
+    {
+        if (!$models) {
+            return ['code' => 'no_model', 'detail' => 'No model row carries this public_id (run ai:llm-sync, or check the alias target).'];
+        }
+
+        $active = array_filter($models, fn ($m) => $m->is_active);
+
+        if (!$active) {
+            return ['code' => 'model_disabled', 'detail' => 'Every model row with this public_id is inactive (the sync deactivates models the provider stops listing).'];
+        }
+
+        $why = array_map(function ($m) use ($providers, $usableProviderIds) {
+            $provider = $providers[$m->ai_llm_provider_id] ?? null;
+
+            return match (true) {
+                !$provider                       => "{$m->model_id}: provider row is missing",
+                $provider->deleted_at !== null   => "{$m->model_id}: provider '{$provider->slug}' is deleted",
+                !$provider->is_active            => "{$m->model_id}: provider '{$provider->slug}' is inactive",
+                !in_array($provider->id, $usableProviderIds, true) => "{$m->model_id}: provider '{$provider->slug}' belongs to another account",
+                default                          => "{$m->model_id}: usable",
+            };
+        }, $active);
+
+        return ['code' => 'provider_unavailable', 'detail' => implode('; ', $why)];
     }
 
     public static function publicPrefix(): string

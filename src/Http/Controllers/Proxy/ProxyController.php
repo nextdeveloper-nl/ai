@@ -64,7 +64,10 @@ class ProxyController extends Controller
 
         try {
             if (empty($request->input('messages')) || $requested === '' || !$request->input('max_tokens')) {
-                throw new LlmProxyException("'model', 'messages' and 'max_tokens' are required.", 400, 'invalid_request_error', 'invalid_request');
+                throw new LlmProxyException(
+                    "The Messages API needs 'model', a non-empty 'messages' list and 'max_tokens'; at least one is missing.",
+                    400, 'invalid_request_error', 'invalid_request'
+                );
             }
 
             $payload = AnthropicMessagesAdapter::toOpenAiRequest($request->all());
@@ -127,7 +130,7 @@ class ProxyController extends Controller
             unset($payload['model']);
 
             if (empty($payload['messages'])) {
-                throw new LlmProxyException("'messages' is required.", 400, 'invalid_request_error', 'invalid_request');
+                throw new LlmProxyException("The 'messages' field is required: send a non-empty list of {role, content} messages to fan out.", 400, 'invalid_request_error', 'invalid_request');
             }
 
             return new JsonResponse(LlmProxyService::broadcast($group, $payload, $key));
