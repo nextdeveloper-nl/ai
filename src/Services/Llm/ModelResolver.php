@@ -55,7 +55,7 @@ class ModelResolver
         }
 
         // A public id that exists but cannot be served says why; anything else is simply unknown.
-        if (LlmModels::withoutGlobalScopes()->where('public_id', $requested)->whereNull('deleted_at')->exists()) {
+        if (self::visibleModels($requested, $accountId)->exists()) {
             throw self::unavailable($requested, $requested, $accountId, false);
         }
 
@@ -137,12 +137,28 @@ class ModelResolver
     }
 
     /**
+     * The non-deleted models with a public id that the account may know about: those of platform providers and of its
+     * own providers. A model of another account's provider must look exactly like an id that does not exist.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<LlmModels>
+     */
+    private static function visibleModels(string $publicId, int $accountId)
+    {
+        return LlmModels::withoutGlobalScopes()
+            ->where('public_id', $publicId)
+            ->whereNull('deleted_at')
+            ->whereIn('ai_llm_provider_id', LlmProviders::withoutGlobalScopes()
+                ->where(fn ($q) => $q->whereNull('iam_account_id')->orWhere('iam_account_id', $accountId))
+                ->select('id'));
+    }
+
+    /**
      * Why a public model cannot be served right now. The customer is told what is wrong with the model or alias they
      * used (never which provider is behind it); the exact cause, with provider names, goes to the log.
      */
     private static function unavailable(string $requested, string $publicId, int $accountId, bool $viaAlias): LlmProxyException
     {
-        $models = LlmModels::withoutGlobalScopes()->where('public_id', $publicId)->whereNull('deleted_at')->get();
+        $models = self::visibleModels($publicId, $accountId)->get();
         $providers = LlmProviders::withoutGlobalScopes()->whereIn('id', $models->pluck('ai_llm_provider_id'))->get()->keyBy('id');
         $usable = self::usableProviders($accountId)->pluck('id')->all();
 
