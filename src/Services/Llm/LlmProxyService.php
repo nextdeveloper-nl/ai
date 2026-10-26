@@ -532,7 +532,9 @@ class LlmProxyService
         $models = LlmModels::withoutGlobalScopes()
             ->where('is_active', true)
             ->whereNotNull('public_id')
-            ->whereIn('ai_llm_provider_id', $providers->pluck('id'))
+            ->where(fn ($q) => $q->whereIn('ai_llm_provider_id', $providers->pluck('id'))
+                ->orWhere(fn ($q) => $q->where('is_public', true)
+                    ->whereIn('ai_llm_provider_id', LlmProviders::withoutGlobalScopes()->where('is_active', true)->select('id'))))
             ->pluck('public_id');
 
         return [

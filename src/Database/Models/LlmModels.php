@@ -28,6 +28,7 @@ use NextDeveloper\Commons\Database\Traits\RunAsAdministrator;
  * @property integer $context_window
  * @property array $capabilities
  * @property boolean $is_active
+ * @property boolean $is_public
  * @property integer $iam_user_id
  * @property integer $iam_account_id
  * @property \Carbon\Carbon $created_at
@@ -60,6 +61,7 @@ class LlmModels extends Model
             'context_window',
             'capabilities',
             'is_active',
+            'is_public',
             'iam_user_id',
             'iam_account_id',
     ];
@@ -91,6 +93,7 @@ class LlmModels extends Model
     'context_window' => 'integer',
     'capabilities' => 'array',
     'is_active' => 'boolean',
+    'is_public' => 'boolean',
     'created_at' => 'datetime',
     'updated_at' => 'datetime',
     'deleted_at' => 'datetime',
