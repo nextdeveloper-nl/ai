@@ -40,10 +40,25 @@ class LlmModelsService extends AbstractLlmModelsService
             return LlmModels::create($data)->fresh();
         }
 
+        unset($data['is_public']);
+
         // The abstract create() would try to turn an id into a uuid lookup; give it the uuid it expects.
         $data['iam_account_id'] = \NextDeveloper\IAM\Database\Models\Accounts::withoutGlobalScopes()->find($provider->iam_account_id)->uuid;
 
         return parent::create($data);
+    }
+
+    /**
+     * Only ai-admin decides which models are public: a public model is served to every account, so the owner of an
+     * account provider must not be able to publish one. The owner still edits the rest of the model freely.
+     */
+    public static function update($id, array $data)
+    {
+        if (!UserHelper::hasRole('ai-admin')) {
+            unset($data['is_public']);
+        }
+
+        return parent::update($id, $data);
     }
 
     /**

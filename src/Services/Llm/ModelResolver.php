@@ -127,6 +127,7 @@ class ModelResolver
         $providers = self::usableProviders($accountId)->keyBy('id');
         $publicProviders = LlmProviders::withoutGlobalScopes()
             ->where('is_active', true)
+            ->whereNull('deleted_at')
             ->whereIn('id', $models->where('is_public', true)->pluck('ai_llm_provider_id'))
             ->get()
             ->keyBy('id');
