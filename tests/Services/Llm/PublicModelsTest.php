@@ -152,4 +152,42 @@ class PublicModelsTest extends TestCase
         $this->assertStringContainsString(': keep-alive', $kept);
         $this->assertStringContainsString('id: 7', $kept);
     }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    private function row(string $class, array $attributes): object
+    {
+        return $this->bare($class, $attributes);
+    }
+
+    public function test_unavailable_models_are_told_apart(): void
+    {
+        $active = $this->row(LlmProviders::class, ['id' => 1, 'slug' => 'greenference', 'is_active' => true, 'deleted_at' => null]);
+        $off = $this->row(LlmProviders::class, ['id' => 2, 'slug' => 'other', 'is_active' => false, 'deleted_at' => null]);
+        $model = fn (int $provider, bool $isActive) => $this->row(LlmModels::class, ['ai_llm_provider_id' => $provider, 'model_id' => 'm', 'is_active' => $isActive]);
+
+        $this->assertSame('no_model', ModelResolver::classify([], [], [1])['code']);
+        $this->assertSame('model_disabled', ModelResolver::classify([$model(1, false)], [1 => $active], [1])['code']);
+
+        $inactive = ModelResolver::classify([$model(2, true)], [2 => $off], [1]);
+        $this->assertSame('provider_unavailable', $inactive['code']);
+        $this->assertStringContainsString("provider 'other' is inactive", $inactive['detail']);
+
+        $foreign = ModelResolver::classify([$model(1, true)], [1 => $active], []);
+        $this->assertStringContainsString('belongs to another account', $foreign['detail']);
+    }
+
+    public function test_errors_tell_the_caller_what_to_do_and_never_name_the_provider(): void
+    {
+        $method = new ReflectionMethod(LlmProxyService::class, 'publicAnswer');
+        $primary = $this->offer('greenference', 1, 1);
+
+        foreach ([[429, 'Wait a few seconds'], [400, 'none should be empty'], [503, 'contact support']] as [$status, $hint]) {
+            $message = $method->invoke(null, $status, ['error' => ['message' => 'greenference said no']], $primary)[1]['error']['message'];
+
+            $this->assertStringContainsString($hint, $message);
+            $this->assertStringNotContainsStringIgnoringCase('greenference', $message);
+        }
+    }
 }

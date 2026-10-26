@@ -105,7 +105,7 @@ class LlmSpendLimitService
         if ($alias && $alias->monthly_spend_limit !== null
             && self::spentThisMonth($accountId, $alias->alias) + $estimate > (float) $alias->monthly_spend_limit) {
             throw new LlmProxyException(
-                "The monthly spend limit of the alias '{$alias->alias}' is reached.",
+                "The monthly spend limit of the alias '{$alias->alias}' is reached. Raise the alias limit or wait until the next month starts (UTC).",
                 429, 'insufficient_quota', 'monthly_spend_limit_reached'
             );
         }
@@ -113,7 +113,7 @@ class LlmSpendLimitService
         $limit = self::accountLimit($accountId);
 
         if ($limit !== null && self::spentThisMonth($accountId) + $estimate > $limit) {
-            throw new LlmProxyException('The monthly spend limit of the account is reached.', 429, 'insufficient_quota', 'monthly_spend_limit_reached');
+            throw new LlmProxyException('The monthly spend limit of your account is reached. Raise the limit or wait until the next month starts (UTC).', 429, 'insufficient_quota', 'monthly_spend_limit_reached');
         }
     }
 }

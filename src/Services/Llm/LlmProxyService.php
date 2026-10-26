@@ -64,7 +64,7 @@ class LlmProxyService
             if ($error) {
                 self::log($served, $key, $requestId, null, $extra + ['status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'error_message' => $error->getMessage()]);
 
-                throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
+                throw new LlmProxyException('The model could not be reached right now. Try again in a moment; if it keeps happening, contact support.', 502, 'api_error', 'upstream_unreachable');
             }
 
             $log = self::log($served, $key, $requestId, null, $extra + self::toLogResult($result, self::elapsed($startedAt), false));
@@ -74,7 +74,7 @@ class LlmProxyService
             return [$status, $body, self::meta($served, $log, $requestId)];
         }
 
-        throw new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable');
+        throw new LlmProxyException('The model could not be reached right now. Try again in a moment; if it keeps happening, contact support.', 502, 'api_error', 'upstream_unreachable');
     }
 
     /**
@@ -94,9 +94,9 @@ class LlmProxyService
         }
 
         [$status, $message, $type, $code] = match (true) {
-            $status === 429                                  => [429, 'Rate limit reached. Try again shortly.', 'rate_limit_error', 'rate_limit_exceeded'],
-            in_array($status, [400, 404, 413, 422], true)    => [400, 'The request was rejected by the model. Check the request parameters.', 'invalid_request_error', 'request_rejected'],
-            default                                          => [502, 'The model is temporarily unavailable.', 'api_error', 'upstream_error'],
+            $status === 429                                  => [429, 'Too many requests for this model right now. Wait a few seconds and retry.', 'rate_limit_error', 'rate_limit_exceeded'],
+            in_array($status, [400, 404, 413, 422], true)    => [400, 'The model rejected the request. Check the messages (none should be empty), max_tokens, temperature and the other parameters, and the size of the conversation.', 'invalid_request_error', 'request_rejected'],
+            default                                          => [502, 'The model is temporarily unavailable. Retry in a moment; if it keeps happening, contact support.', 'api_error', 'upstream_error'],
         };
 
         return [$status, ['error' => ['message' => $message, 'type' => $type, 'code' => $code]]];
@@ -223,7 +223,7 @@ class LlmProxyService
                 }
 
                 self::log($served, $key, $requestId, null, ['attempts' => $attempts, 'served_by_fallback' => $i > 0, 'status' => 'failed', 'status_code' => 502, 'latency_ms' => self::elapsed($startedAt), 'stream' => true, 'error_message' => $e->getMessage()]);
-                $emit('data: ' . json_encode((new LlmProxyException('Upstream provider is unreachable.', 502, 'api_error', 'upstream_unreachable'))->toArray()) . "\n\n");
+                $emit('data: ' . json_encode((new LlmProxyException('The model could not be reached right now. Try again in a moment; if it keeps happening, contact support.', 502, 'api_error', 'upstream_unreachable'))->toArray()) . "\n\n");
 
                 return null;
             }
@@ -469,7 +469,7 @@ class LlmProxyService
 
         // Nothing can run because the account has no credit: say so with 402 instead of a 200 full of failures.
         if (!$promises && $targets && collect($targets)->every(fn ($t) => ($t['error']['code'] ?? null) === 'insufficient_credit')) {
-            throw new LlmProxyException('Insufficient credit.', 402, 'insufficient_quota', 'insufficient_credit');
+            throw new LlmProxyException('Insufficient credit to run this request. Add credit to your account and try again.', 402, 'insufficient_quota', 'insufficient_credit');
         }
 
         // settle() never throws: every promise resolves to ['state' => fulfilled|rejected, ...].
@@ -548,7 +548,10 @@ class LlmProxyService
     public static function preflight(array $payload, LlmApiKeys $key): LlmTarget
     {
         if (empty($payload['model']) || empty($payload['messages'])) {
-            throw new LlmProxyException("'model' and 'messages' are required.", 400, 'invalid_request_error', 'invalid_request');
+            throw new LlmProxyException(
+                empty($payload['model']) ? "The 'model' field is required: send an alias or a model id from GET /ai/v1/models." : "The 'messages' field is required: send a non-empty list of {role, content} messages.",
+                400, 'invalid_request_error', 'invalid_request'
+            );
         }
 
         $target = ModelResolver::resolve((string) $payload['model'], $key->iam_account_id);
@@ -578,7 +581,7 @@ class LlmProxyService
         $available = $account ? CreditHelper::getAvailable($account) - LlmUsageLogsService::pendingCost($key->iam_account_id) - $reserved : 0;
 
         if (!$account || $available <= 0 || $available < $estimate) {
-            throw new LlmProxyException('Insufficient credit.', 402, 'insufficient_quota', 'insufficient_credit');
+            throw new LlmProxyException('Insufficient credit to run this request. Add credit to your account and try again.', 402, 'insufficient_quota', 'insufficient_credit');
         }
 
         return $estimate;
