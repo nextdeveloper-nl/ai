@@ -10,6 +10,7 @@ use NextDeveloper\AI\Database\Observers\LlmAliasesObserver;
 use NextDeveloper\Commons\Database\Traits\UuidId;
 use NextDeveloper\Commons\Common\Cache\Traits\CleanCache;
 use NextDeveloper\Commons\Database\Traits\RunAsAdministrator;
+use NextDeveloper\IAM\Helpers\UserHelper;
 
 /**
  * LlmAliases model.
@@ -139,6 +140,18 @@ class LlmAliases extends Model
         parent::booted();
 
         static::observe(LlmAliasesObserver::class);
+
+        // Platform aliases (the helper routing names) belong to no account: only ai-admin sees them, everybody
+        // else sees the aliases of their own account. The resolver and the seeders read without global scopes.
+        static::addGlobalScope('own_account', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            $user = UserHelper::me();
+
+            if (!$user || UserHelper::hasRole('ai-admin')) {
+                return;
+            }
+
+            $builder->where($builder->getModel()->getTable() . '.iam_account_id', UserHelper::currentAccount()?->id);
+        });
     }
 
     public static function registerScopes()
