@@ -62,7 +62,17 @@ class LlmAliasesObserver
             new NotAllowedException('You are not allowed to save this record')
         );
 
-        Events::fire('saving:NextDeveloper\AI\LlmAliases', $model);
+        // Only ai-admin writes platform aliases or aliases of another account; everybody else keeps their own.
+        if (UserHelper::me() && !UserHelper::hasRole('ai-admin')) {
+            $account = UserHelper::currentAccount();
+
+            throw_if(!$account, new NotAllowedException('You are not allowed to save this record'));
+
+            $model->iam_account_id = $account->id;
+            $model->iam_user_id ??= UserHelper::me()->id;
+        }
+
+                Events::fire('saving:NextDeveloper\AI\LlmAliases', $model);
     }
 
     /**
