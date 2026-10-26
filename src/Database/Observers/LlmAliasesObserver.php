@@ -69,7 +69,7 @@ class LlmAliasesObserver
             throw_if(!$account, new NotAllowedException('You are not allowed to save this record'));
 
             $model->iam_account_id = $account->id;
-            $model->iam_user_id ??= UserHelper::me()->id;
+            $model->iam_user_id = $model->exists ? $model->getOriginal('iam_user_id') : UserHelper::me()->id;
         }
 
                 Events::fire('saving:NextDeveloper\AI\LlmAliases', $model);
