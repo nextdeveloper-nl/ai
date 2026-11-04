@@ -24,27 +24,6 @@ ALTER TABLE ai_llm_usage_logs
 CREATE INDEX IF NOT EXISTS idx_ai_llm_usage_logs_account_created ON ai_llm_usage_logs USING btree (iam_account_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_llm_usage_logs_alias ON ai_llm_usage_logs USING btree (iam_account_id, alias);
 
--- Change history of aliases ("Primary changed from X to Y by <user>").
-CREATE SEQUENCE IF NOT EXISTS ai_llm_alias_history_id_seq;
-
-CREATE TABLE IF NOT EXISTS ai_llm_alias_history (
-    id                  bigint NOT NULL DEFAULT nextval('ai_llm_alias_history_id_seq'::regclass),
-    uuid                uuid NOT NULL DEFAULT gen_random_uuid(),
-    ai_llm_alias_id     bigint NOT NULL,
-    alias               text NOT NULL, -- Alias name at the time of the change.
-    action              text NOT NULL, -- created | updated | deleted
-    changes             json, -- {"field": {"from": x, "to": y}}
-    iam_account_id      bigint NOT NULL,
-    iam_user_id         bigint,
-    created_at          timestamp with time zone NOT NULL DEFAULT now(),
-    CONSTRAINT ai_llm_alias_history_pkey PRIMARY KEY (id),
-    CONSTRAINT ai_llm_alias_history_alias_fkey FOREIGN KEY (ai_llm_alias_id) REFERENCES ai_llm_aliases(id),
-    CONSTRAINT ai_llm_alias_history_iam_account_id_fkey FOREIGN KEY (iam_account_id) REFERENCES iam_accounts(id),
-    CONSTRAINT ai_llm_alias_history_iam_user_id_fkey FOREIGN KEY (iam_user_id) REFERENCES iam_users(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_ai_llm_alias_history_alias ON ai_llm_alias_history USING btree (ai_llm_alias_id, created_at);
-
 -- Account level monthly LLM spend limit, on the account's ai_accounts row.
 ALTER TABLE ai_accounts ADD COLUMN IF NOT EXISTS llm_spending_limit numeric(14,6); -- USD per calendar month, NULL = no limit.
 

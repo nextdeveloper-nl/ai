@@ -597,9 +597,11 @@ class LlmProxyService
     {
         $providers = ModelResolver::usableProviders($key->iam_account_id);
 
-        // Only advertise aliases that currently resolve to an available provider.
+        // Only advertise aliases that currently resolve to an available provider. Platform aliases (the helper
+        // routing names) still resolve for everybody, but are not listed unless ai.llm.list_platform_aliases is on.
         $aliases = LlmAliases::withoutGlobalScopes()
-            ->where(fn ($q) => $q->where('iam_account_id', $key->iam_account_id)->orWhereNull('iam_account_id'))
+            ->where(fn ($q) => $q->where('iam_account_id', $key->iam_account_id)
+                ->when(config('ai.llm.list_platform_aliases', false), fn ($q) => $q->orWhereNull('iam_account_id')))
             ->where('is_active', true)
             ->whereIn('target_provider', $providers->pluck('slug')->push(ModelResolver::publicPrefix()))
             ->pluck('alias');

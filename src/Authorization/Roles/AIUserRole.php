@@ -20,6 +20,12 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
     public const DB_PREFIX = 'ai';
 
+    /**
+     * Tables whose records belong to the user who made them: other users of the same account do not see them.
+     * Everything else of the account (keys, aliases, usage, ...) is shared by the account.
+     */
+    private const OWN_RECORDS_TABLES = ['ai_sessions', 'ai_runs'];
+
     public function apply(Builder $builder, Model $model): void
     {
         $table = $model->getTable();
@@ -47,7 +53,22 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
             return;
         }
 
+        // A conversation has no owner columns of its own: it belongs to a session of the user.
+        if ($table === 'ai_conversations') {
+            $builder->whereIn($table.'.ai_session_id', function ($query) use ($accountId): void {
+                $query->select('id')->from('ai_sessions')
+                    ->where('iam_account_id', $accountId)
+                    ->where('iam_user_id', UserHelper::me()?->id);
+            });
+
+            return;
+        }
+
         $builder->where($table.'.iam_account_id', $accountId);
+
+        if (in_array($table, self::OWN_RECORDS_TABLES, true)) {
+            $builder->where($table.'.iam_user_id', UserHelper::me()?->id);
+        }
     }
 
     public function getModule(): string
@@ -112,12 +133,21 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
     public function checkUpdatePolicy(Model $model, Users $user): bool
     {
-        return (int) $model->iam_account_id === (int) UserHelper::currentAccount()?->id;
+        return $this->ownsRecord($model, $user);
     }
 
     public function checkDeletePolicy(Model $model, Users $user): bool
     {
-        return (int) $model->iam_account_id === (int) UserHelper::currentAccount()?->id;
+        return $this->ownsRecord($model, $user);
+    }
+
+    private function ownsRecord(Model $model, Users $user): bool
+    {
+        if ((int) $model->iam_account_id !== (int) UserHelper::currentAccount()?->id) {
+            return false;
+        }
+
+        return !in_array($model->getTable(), self::OWN_RECORDS_TABLES, true) || (int) $model->iam_user_id === (int) $user->id;
     }
 
     public function getLevel(): int

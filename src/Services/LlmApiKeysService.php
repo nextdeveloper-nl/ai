@@ -2,8 +2,14 @@
 
 namespace NextDeveloper\AI\Services;
 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\Request;
+use NextDeveloper\AI\Database\Filters\LlmApiKeysQueryFilter;
+use NextDeveloper\AI\Database\Models\LlmApiKeys;
 use NextDeveloper\AI\Helpers\LlmKeyHelper;
 use NextDeveloper\AI\Services\AbstractServices\AbstractLlmApiKeysService;
+use NextDeveloper\Commons\Database\GlobalScopes\LimitScope;
 use NextDeveloper\Commons\Exceptions\NotAllowedException;
 
 /**
@@ -15,6 +21,25 @@ use NextDeveloper\Commons\Exceptions\NotAllowedException;
  */
 class LlmApiKeysService extends AbstractLlmApiKeysService
 {
+    /**
+     * A plain list returns every key of the account. LimitScope would cut it to 20 rows and hide the newest keys.
+     * Callers that ask for paginate or rowCount keep the standard behaviour.
+     */
+    public static function get(?LlmApiKeysQueryFilter $filter = null, array $params = []): Collection|LengthAwarePaginator
+    {
+        if (array_key_exists('paginate', $params) || array_key_exists('rowCount', $params)) {
+            return parent::get($filter, $params);
+        }
+
+        $filter ??= new LlmApiKeysQueryFilter(new Request());
+
+        if (array_key_exists('orderBy', $params)) {
+            $filter->orderBy($params['orderBy']);
+        }
+
+        return LlmApiKeys::withoutGlobalScope(LimitScope::class)->filter($filter)->get();
+    }
+
     /**
      * Creates an API key. Only the sha256 hash is stored; the plaintext is attached to the returned
      * model as the transient "plain_key" attribute and is shown to the caller exactly once.
@@ -53,6 +78,12 @@ class LlmApiKeysService extends AbstractLlmApiKeysService
         $old = self::getByRef($ref);
 
         throw_if(!$old, new NotAllowedException('API key not found or not allowed.'));
+
+        if ($old->status !== 'active') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'status' => 'Only an active API key can be regenerated.',
+            ]);
+        }
 
         self::revoke($ref);
 

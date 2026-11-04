@@ -159,12 +159,4 @@ class LlmAliasesController extends AbstractController
         return $this->withArray(LlmAliasesService::stats($ref));
     }
 
-    /**
-     * GET /ai/llm/aliases/{ref}/history : who changed what, newest first.
-     */
-    public function history($ref)
-    {
-        return $this->withArray(['data' => LlmAliasesService::history($ref)]);
-    }
-
 }
