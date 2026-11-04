@@ -63,10 +63,18 @@ class LlmAliasesCreateRequest extends AbstractFormRequest
                 return;
             }
 
-            $exists = \NextDeveloper\AI\Database\Models\LlmModels::withoutGlobalScopes()
-                ->where('model_id', $value)
-                ->whereIn('ai_llm_provider_id', \NextDeveloper\AI\Database\Models\LlmProviders::withoutGlobalScopes()->where('slug', $slug)->select('id'))
-                ->exists();
+            $models = \NextDeveloper\AI\Database\Models\LlmModels::withoutGlobalScopes();
+
+            //  Same split as ModelResolver: the public prefix points at a public model id, any other slug at an upstream model of that provider.
+            $prefix = \NextDeveloper\AI\Services\Llm\ModelResolver::publicPrefix();
+
+            if ($slug === $prefix) {
+                $exists = $models->where('public_id', $prefix . '/' . $value)->where('is_active', true)->exists();
+            } else {
+                $exists = $models->where('model_id', $value)
+                    ->whereIn('ai_llm_provider_id', \NextDeveloper\AI\Database\Models\LlmProviders::withoutGlobalScopes()->where('slug', $slug)->select('id'))
+                    ->exists();
+            }
 
             if (!$exists) {
                 $fail("The provider '{$slug}' does not offer the model '{$value}'.");
