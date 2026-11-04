@@ -140,12 +140,11 @@ Route::prefix('ai')->group(function () {
         }
     );
 
-    Route::prefix('llm/aliases')->group(
+    Route::prefix('llm/aliases')->where(['ai_llm_aliases' => '[0-9a-fA-F-]{36}'])->group(
         function () {
             Route::get('/', 'LlmAliases\LlmAliasesController@index');
             Route::get('/actions', 'LlmAliases\LlmAliasesController@getActions');
             Route::get('/{ai_llm_aliases}/stats', 'LlmAliases\LlmAliasesController@stats');
-            Route::get('/{ai_llm_aliases}/history', 'LlmAliases\LlmAliasesController@history');
 
             Route::get('/{ai_llm_aliases}/{subObjects}', 'LlmAliases\LlmAliasesController@relatedObjects');
             Route::get('/{ai_llm_aliases}', 'LlmAliases\LlmAliasesController@show');
@@ -174,7 +173,7 @@ Route::prefix('ai')->group(function () {
         }
     );
 
-    Route::prefix('llm/api-keys')->group(
+    Route::prefix('llm/api-keys')->where(['ai_llm_api_keys' => '[0-9a-fA-F-]{36}'])->group(
         function () {
             Route::get('/', 'LlmApiKeys\LlmApiKeysController@index');
             Route::get('/actions', 'LlmApiKeys\LlmApiKeysController@getActions');

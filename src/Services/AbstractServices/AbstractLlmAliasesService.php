@@ -169,7 +169,7 @@ class AbstractLlmAliasesService
                 return $obj->$object;
             }
         } catch (\Exception $e) {
-            dd($e);
+            throw $e;
         }
     }
 
