@@ -100,6 +100,7 @@ class AIServiceProvider extends AbstractServiceProvider
         if (!$this->app->routesAreCached() && config('leo.allowed_routes.ai', true)) {
             $this->app['router']
                 ->namespace('NextDeveloper\AI\Http\Controllers')
+                ->middleware([\NextDeveloper\AI\Http\Middlewares\EnsureAiRoles::class])
                 ->group(__DIR__ . DIRECTORY_SEPARATOR . 'Http' . DIRECTORY_SEPARATOR . 'api.routes.php');
         }
     }

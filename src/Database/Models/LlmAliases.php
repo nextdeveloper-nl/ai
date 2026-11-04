@@ -150,7 +150,12 @@ class LlmAliases extends Model
                 return;
             }
 
-            $builder->where($builder->getModel()->getTable() . '.iam_account_id', UserHelper::currentAccount()?->id);
+            // Fails closed: without an account nothing is visible (where(col, null) would match platform rows).
+            $accountId = UserHelper::currentAccount()?->id;
+
+            $accountId === null
+                ? $builder->whereRaw('1 = 0')
+                : $builder->where($builder->getModel()->getTable() . '.iam_account_id', $accountId);
         });
     }
 
