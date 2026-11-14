@@ -4,6 +4,7 @@ namespace NextDeveloper\AI\Database\Observers;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use NextDeveloper\AI\Database\Models\Sessions;
 use NextDeveloper\Commons\Exceptions\NotAllowedException;
 use NextDeveloper\IAM\Helpers\UserHelper;
 use NextDeveloper\Events\Services\Events;
@@ -61,6 +62,8 @@ class ConversationsObserver
             !UserHelper::can('save', $model),
             new NotAllowedException('You are not allowed to save this record')
         );
+
+        $this->copyOwnerFromSession($model);
 
         Events::fire('saving:NextDeveloper\AI\Conversations', $model);
     }
@@ -148,4 +151,24 @@ class ConversationsObserver
         Events::fire('restored:NextDeveloper\AI\Conversations', $model);
     }
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
+
+    /**
+     * A conversation belongs to whoever owns its session, whatever the caller sent. Only ai-admin may
+     * write owner columns by hand; calls without a user (console commands) are left alone.
+     */
+    protected function copyOwnerFromSession(Model $model): void
+    {
+        if (!UserHelper::me() || UserHelper::hasRole('ai-admin')) {
+            return;
+        }
+
+        $session = $model->ai_session_id
+            ? Sessions::withoutGlobalScopes()->where('id', $model->ai_session_id)->first()
+            : null;
+
+        throw_if(!$session, new NotAllowedException('You are not allowed to save this record'));
+
+        $model->iam_account_id = $session->iam_account_id;
+        $model->iam_user_id = $session->iam_user_id;
+    }
 }

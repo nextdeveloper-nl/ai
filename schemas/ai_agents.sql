@@ -17,7 +17,7 @@ CREATE TABLE ai_agents (
     metadata            json, -- Additional metadata associated with the AI agent.
     is_active           boolean NOT NULL DEFAULT true, -- Indicates whether the AI agent is currently active.
     iam_user_id         bigint, -- User who created or owns the AI agent.
-    iam_account_id      bigint, -- Account that owns the AI agent.
+    iam_account_id      bigint NOT NULL, -- Account that owns the AI agent.
     created_at          timestamp with time zone NOT NULL DEFAULT now(),
     updated_at          timestamp with time zone NOT NULL DEFAULT now(),
     deleted_at          timestamp with time zone,
@@ -30,15 +30,14 @@ CREATE TABLE ai_agents (
     is_published        boolean NOT NULL DEFAULT false,
     published_at        timestamp with time zone,
     price               numeric(10,6) NOT NULL DEFAULT 0,
-    CONSTRAINT ai_agents_pkey PRIMARY KEY (id),
-    CONSTRAINT ai_agents_slug_key UNIQUE (slug),
-    CONSTRAINT ai_agents_slug_unique UNIQUE (slug)
+    CONSTRAINT ai_agents_pkey PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_ai_agents_category ON public.ai_agents USING btree (common_category_id);
 CREATE INDEX idx_ai_agents_iam_account ON public.ai_agents USING btree (iam_account_id);
 CREATE INDEX idx_ai_agents_is_active ON public.ai_agents USING btree (is_active);
 CREATE INDEX idx_ai_agents_is_published ON public.ai_agents USING btree (is_published);
+CREATE UNIQUE INDEX uq_ai_agents_account_slug ON public.ai_agents USING btree (iam_account_id, slug) WHERE deleted_at IS NULL;
 CREATE INDEX idx_ai_agents_slug ON public.ai_agents USING btree (slug);
 CREATE INDEX idx_ai_agents_tags ON public.ai_agents USING gin (tags);
 CREATE INDEX idx_ai_agents_uuid ON public.ai_agents USING btree (uuid);

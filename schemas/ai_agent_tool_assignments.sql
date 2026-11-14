@@ -6,6 +6,7 @@ CREATE TABLE ai_agent_tool_assignments (
     uuid                    uuid NOT NULL DEFAULT gen_random_uuid(),
     ai_agent_id             bigint NOT NULL,
     ai_available_helper_id  bigint NOT NULL,
+    iam_account_id          bigint, -- Account of the agent.
     configuration           json, -- Per-agent override config for this tool, if any.
     created_at              timestamp with time zone NOT NULL DEFAULT now(),
     updated_at              timestamp with time zone NOT NULL DEFAULT now(),

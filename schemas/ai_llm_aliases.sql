@@ -20,7 +20,7 @@ CREATE TABLE ai_llm_aliases (
     max_tokens                integer,
     system_prompt             text,
     monthly_spend_limit       numeric(14,6),
-    iam_account_id      bigint NOT NULL,
+    iam_account_id      bigint, -- NULL = platform alias.
     iam_user_id         bigint,
     created_at          timestamp with time zone NOT NULL DEFAULT now(),
     updated_at          timestamp with time zone NOT NULL DEFAULT now(),
@@ -30,5 +30,5 @@ CREATE TABLE ai_llm_aliases (
     CONSTRAINT ai_llm_aliases_iam_user_id_fkey FOREIGN KEY (iam_user_id) REFERENCES iam_users(id)
 );
 
-CREATE UNIQUE INDEX uq_ai_llm_aliases_account_alias ON ai_llm_aliases (iam_account_id, alias) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX uq_ai_llm_aliases_account_alias ON ai_llm_aliases (COALESCE(iam_account_id, (0)::bigint), alias) WHERE deleted_at IS NULL;
 CREATE INDEX idx_ai_llm_aliases_uuid ON ai_llm_aliases USING btree (uuid);
