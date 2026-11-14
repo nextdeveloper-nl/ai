@@ -153,7 +153,7 @@ class ConversationsObserver
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
 
     /**
-     * A conversation belongs to whoever owns its session, whatever the caller sent. Only ai-admin may
+     * A conversation belongs to whoever owns its session, whatever the caller sent, and the session has to be of the caller's account. Only ai-admin may
      * write owner columns by hand; calls without a user (console commands) are left alone.
      */
     protected function copyOwnerFromSession(Model $model): void
@@ -166,7 +166,11 @@ class ConversationsObserver
             ? Sessions::withoutGlobalScopes()->where('id', $model->ai_session_id)->first()
             : null;
 
-        throw_if(!$session, new NotAllowedException('You are not allowed to save this record'));
+        // The session has to be the caller's own account's: a conversation cannot be attached to another tenant's session.
+        throw_if(
+            !$session || (int) $session->iam_account_id !== (int) UserHelper::currentAccount()?->id,
+            new NotAllowedException('You are not allowed to save this record')
+        );
 
         $model->iam_account_id = $session->iam_account_id;
         $model->iam_user_id = $session->iam_user_id;
