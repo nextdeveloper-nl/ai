@@ -93,11 +93,28 @@ class AiRolesService
             ->whereIn('name', ['ai-user', 'ai-manager', 'ai-admin'])
             ->pluck('id');
 
-        return \NextDeveloper\IAM\Database\Models\RoleUsers::withoutGlobalScopes()
+        $hasRole = \NextDeveloper\IAM\Database\Models\RoleUsers::withoutGlobalScopes()
             ->where('iam_user_id', $userId)
             ->where('iam_account_id', $accountId)
             ->whereIn('iam_role_id', $roleIds)
             ->where('is_active', true)
+            ->exists();
+
+        // Kicking a user from an account removes the membership row only and leaves their role rows behind,
+        // so the role alone is not proof of access: the user must still be a member (or the owner).
+        return $hasRole && self::isMemberOrOwner($userId, $accountId);
+    }
+
+    private static function isMemberOrOwner(int $userId, int $accountId): bool
+    {
+        $isOwner = Accounts::withoutGlobalScopes()
+            ->where('id', $accountId)
+            ->where('iam_user_id', $userId)
+            ->exists();
+
+        return $isOwner || \NextDeveloper\IAM\Database\Models\AccountUsers::withoutGlobalScopes()
+            ->where('iam_user_id', $userId)
+            ->where('iam_account_id', $accountId)
             ->exists();
     }
 
