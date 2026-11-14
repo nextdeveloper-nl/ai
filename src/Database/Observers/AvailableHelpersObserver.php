@@ -15,6 +15,8 @@ use NextDeveloper\Events\Services\Events;
  */
 class AvailableHelpersObserver
 {
+    use EnforcesOwner;
+
     /**
      * Triggered when a new record is retrieved.
      *
@@ -61,6 +63,8 @@ class AvailableHelpersObserver
             !UserHelper::can('save', $model),
             new NotAllowedException('You are not allowed to save this record')
         );
+
+        $this->enforceOwner($model);
 
         Events::fire('saving:NextDeveloper\AI\AvailableHelpers', $model);
     }

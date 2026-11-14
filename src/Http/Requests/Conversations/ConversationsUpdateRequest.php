@@ -2,10 +2,13 @@
 
 namespace NextDeveloper\AI\Http\Requests\Conversations;
 
+use NextDeveloper\AI\Database\Models\Sessions;
+use NextDeveloper\AI\Http\Requests\ChecksVisibleReferences;
 use NextDeveloper\Commons\Http\Requests\AbstractFormRequest;
 
 class ConversationsUpdateRequest extends AbstractFormRequest
 {
+    use ChecksVisibleReferences;
 
     /**
      * @return array
@@ -20,4 +23,9 @@ class ConversationsUpdateRequest extends AbstractFormRequest
         ];
     }
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
+
+    public function withValidator($validator): void
+    {
+        $this->requireVisible($validator, 'ai_session_id', Sessions::class);
+    }
 }

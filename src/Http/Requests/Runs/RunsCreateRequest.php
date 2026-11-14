@@ -2,10 +2,13 @@
 
 namespace NextDeveloper\AI\Http\Requests\Runs;
 
+use NextDeveloper\AI\Database\Models\Agents;
+use NextDeveloper\AI\Http\Requests\ChecksVisibleReferences;
 use NextDeveloper\Commons\Http\Requests\AbstractFormRequest;
 
 class RunsCreateRequest extends AbstractFormRequest
 {
+    use ChecksVisibleReferences;
 
     /**
      * @return array
@@ -29,4 +32,9 @@ class RunsCreateRequest extends AbstractFormRequest
         ];
     }
     // EDIT AFTER HERE - WARNING: ABOVE THIS LINE MAY BE REGENERATED AND YOU MAY LOSE CODE
+
+    public function withValidator($validator): void
+    {
+        $this->requireVisible($validator, 'ai_agent_id', Agents::class);
+    }
 }
