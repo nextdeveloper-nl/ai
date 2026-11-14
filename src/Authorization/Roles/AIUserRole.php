@@ -12,6 +12,8 @@ use NextDeveloper\IAM\Helpers\UserHelper;
 
 class AIUserRole extends AbstractRole implements IAuthorizationRole
 {
+    use ScopesAiRecordsToAccount;
+
     public const NAME = 'ai-user';
 
     public const LEVEL = 150;
@@ -20,55 +22,9 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
     public const DB_PREFIX = 'ai';
 
-    /**
-     * Tables whose records belong to the user who made them: other users of the same account do not see them.
-     * Everything else of the account (keys, aliases, usage, ...) is shared by the account.
-     */
-    private const OWN_RECORDS_TABLES = ['ai_sessions', 'ai_runs'];
-
     public function apply(Builder $builder, Model $model): void
     {
-        $table = $model->getTable();
-        $accountId = UserHelper::currentAccount()?->id;
-
-        // Public helpers are available to everyone, whether they belong to an account or not
-        // (platform helpers have no account). Private ones only to their own account.
-        if ($table === 'ai_available_helpers') {
-            $builder->where(function (Builder $query) use ($table, $accountId): void {
-                $query->where($table.'.is_public', true)
-                    ->orWhere($table.'.iam_account_id', $accountId);
-            });
-
-            return;
-        }
-
-        // Platform LLM providers and their models have no owning account and are visible to everybody.
-        // Writes on them are still blocked by checkUpdatePolicy()/checkDeletePolicy() (account must match).
-        if (in_array($table, ['ai_llm_providers', 'ai_llm_models'], true)) {
-            $builder->where(function (Builder $query) use ($table, $accountId): void {
-                $query->whereNull($table.'.iam_account_id')
-                    ->orWhere($table.'.iam_account_id', $accountId);
-            });
-
-            return;
-        }
-
-        // A conversation has no owner columns of its own: it belongs to a session of the user.
-        if ($table === 'ai_conversations') {
-            $builder->whereIn($table.'.ai_session_id', function ($query) use ($accountId): void {
-                $query->select('id')->from('ai_sessions')
-                    ->where('iam_account_id', $accountId)
-                    ->where('iam_user_id', UserHelper::me()?->id);
-            });
-
-            return;
-        }
-
-        $builder->where($table.'.iam_account_id', $accountId);
-
-        if (in_array($table, self::OWN_RECORDS_TABLES, true)) {
-            $builder->where($table.'.iam_user_id', UserHelper::me()?->id);
-        }
+        $this->applyAccountScope($builder, $model, true);
     }
 
     public function getModule(): string
@@ -153,11 +109,7 @@ class AIUserRole extends AbstractRole implements IAuthorizationRole
 
     private function ownsRecord(Model $model, Users $user): bool
     {
-        if ((int) $model->iam_account_id !== (int) UserHelper::currentAccount()?->id) {
-            return false;
-        }
-
-        return !in_array($model->getTable(), self::OWN_RECORDS_TABLES, true) || (int) $model->iam_user_id === (int) $user->id;
+        return $this->ownsAccountRecord($model, $user, true);
     }
 
     public function getLevel(): int

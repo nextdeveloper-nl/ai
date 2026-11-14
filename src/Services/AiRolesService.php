@@ -83,6 +83,24 @@ class AiRolesService
         return (array) config("ai.roles.{$which}", []);
     }
 
+    /**
+     * True while the user still holds an active AI role in the account. API keys stop working once this is false,
+     * so removing a member (or their roles) cuts their keys off without waiting for the key to expire.
+     */
+    public static function hasAiAccess(int $userId, int $accountId): bool
+    {
+        $roleIds = \NextDeveloper\IAM\Database\Models\Roles::withoutGlobalScopes()
+            ->whereIn('name', ['ai-user', 'ai-manager', 'ai-admin'])
+            ->pluck('id');
+
+        return \NextDeveloper\IAM\Database\Models\RoleUsers::withoutGlobalScopes()
+            ->where('iam_user_id', $userId)
+            ->where('iam_account_id', $accountId)
+            ->whereIn('iam_role_id', $roleIds)
+            ->where('is_active', true)
+            ->exists();
+    }
+
     private static function has(Users $user, Accounts $account, int $roleId): bool
     {
         return \NextDeveloper\IAM\Database\Models\RoleUsers::withoutGlobalScopes()
