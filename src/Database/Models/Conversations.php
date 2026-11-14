@@ -21,6 +21,8 @@ use NextDeveloper\Commons\Database\Traits\RunAsAdministrator;
  * @property integer $id
  * @property string $uuid
  * @property integer $ai_session_id
+ * @property integer $iam_account_id
+ * @property integer $iam_user_id
  * @property string $role
  * @property string $message
  * @property \Carbon\Carbon $created_at
@@ -45,6 +47,8 @@ class Conversations extends Model
 
     protected $fillable = [
             'ai_session_id',
+            'iam_account_id',
+            'iam_user_id',
             'role',
             'message',
             'metadata',
