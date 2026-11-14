@@ -115,6 +115,7 @@ class AiRolesService
         return $isOwner || \NextDeveloper\IAM\Database\Models\AccountUsers::withoutGlobalScopes()
             ->where('iam_user_id', $userId)
             ->where('iam_account_id', $accountId)
+            ->where('is_active', true)
             ->exists();
     }
 
