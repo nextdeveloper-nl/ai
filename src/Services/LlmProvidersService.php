@@ -56,7 +56,33 @@ class LlmProvidersService extends AbstractLlmProvidersService
     {
         unset($data['is_platform']);
 
+        self::guardPlatformProvider($id, 'change');
+
+        // Ownership never changes through the API: a provider cannot be handed to, or taken from, another account.
+        unset($data['iam_account_id'], $data['iam_user_id']);
+
         return parent::update($id, self::encryptKey($data));
+    }
+
+    public static function delete($id)
+    {
+        self::guardPlatformProvider($id, 'delete');
+
+        return parent::delete($id);
+    }
+
+    /**
+     * Platform providers (no owning account) hold the upstream keys of every customer's traffic, so only ai-admin
+     * may change or delete them.
+     */
+    private static function guardPlatformProvider(string $ref, string $action): void
+    {
+        $provider = LlmProviders::where('uuid', $ref)->first();
+
+        throw_if(
+            $provider && $provider->iam_account_id === null && !UserHelper::hasRole('ai-admin'),
+            new NotAllowedException("Only ai-admin can {$action} platform providers.")
+        );
     }
 
     /**

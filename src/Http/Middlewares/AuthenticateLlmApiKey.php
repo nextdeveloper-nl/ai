@@ -5,6 +5,7 @@ namespace NextDeveloper\AI\Http\Middlewares;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use NextDeveloper\AI\Services\AiRolesService;
 use NextDeveloper\AI\Services\Llm\AnthropicMessagesAdapter;
 use NextDeveloper\AI\Services\LlmApiKeysService;
 use NextDeveloper\IAM\Helpers\UserHelper;
@@ -40,6 +41,15 @@ class AuthenticateLlmApiKey
 
         UserHelper::setUserById($key->iam_user_id);
         UserHelper::setCurrentAccountById($key->iam_account_id);
+
+        // A key must not outlive its owner's access: the user has to still belong to the account and hold an AI role.
+        if (!AiRolesService::hasAiAccess($key->iam_user_id, $key->iam_account_id)) {
+            return $request->is('ai/v1/messages')
+                ? response()->json(AnthropicMessagesAdapter::errorBody('Invalid or missing API key.', 401), 401)
+                : response()->json([
+                    'error' => ['message' => 'Invalid or missing API key.', 'type' => 'invalid_request_error', 'code' => 'invalid_api_key'],
+                ], 401);
+        }
 
         // Cheap, non-model write: avoids firing observers/events on every proxied call.
         DB::table($key->getTable())->where('id', $key->id)->update(['last_used_at' => now()]);

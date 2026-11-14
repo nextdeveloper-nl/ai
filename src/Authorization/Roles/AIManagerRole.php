@@ -12,17 +12,20 @@ use NextDeveloper\IAM\Helpers\UserHelper;
 
 class AIManagerRole extends AbstractRole implements IAuthorizationRole
 {
+    use ScopesAiRecordsToAccount;
+
     public const NAME = 'ai-manager';
 
     public const LEVEL = 100;
 
-    public const DESCRIPTION = 'AI operations manager who has full access to all AI objects across all accounts.';
+    public const DESCRIPTION = 'AI manager of one account: full access to all AI objects of their own account, never of other accounts.';
 
     public const DB_PREFIX = 'ai';
 
     public function apply(Builder $builder, Model $model): void
     {
-        // Managers can see all AI records across accounts — no scope applied.
+        // Managers work across the users of their own account only; cross-account access is ai-admin.
+        $this->applyAccountScope($builder, $model, false);
     }
 
     public function getModule(): string
@@ -117,7 +120,12 @@ class AIManagerRole extends AbstractRole implements IAuthorizationRole
 
     public function checkUpdatePolicy(Model $model, Users $user): bool
     {
-        return true;
+        return $this->ownsAccountRecord($model, $user, false);
+    }
+
+    public function checkDeletePolicy(Model $model, Users $user): bool
+    {
+        return $this->ownsAccountRecord($model, $user, false);
     }
 
     public function getLevel(): int
