@@ -123,10 +123,10 @@ class LlmChatHistoryService
         $perPage = min(100, max(1, (int) ($filters['per_page'] ?? 20)));
         $search = trim((string) ($filters['search'] ?? ''));
 
-        $query = LlmChats::where('iam_user_id', $owner['user'])->orderByDesc('updated_at')->orderByDesc('id');
+        $query = LlmChats::ownedBy($owner)->orderByDesc('updated_at')->orderByDesc('id');
 
         if ($search !== '') {
-            $ids = self::matchingChatIds($owner['user'], $search);
+            $ids = self::matchingChatIds($owner, $search);
             $query->where(fn ($q) => $q->where('title', 'ilike', '%' . str_replace(['%', '_'], ['\%', '\_'], $search) . '%')->orWhereIn('id', $ids));
         }
 
@@ -222,7 +222,7 @@ class LlmChatHistoryService
     public static function clearAll(): int
     {
         $owner = self::owner();
-        $ids = LlmChats::where('iam_user_id', $owner['user'])->pluck('id');
+        $ids = LlmChats::ownedBy($owner)->pluck('id');
 
         LlmChatMessages::whereIn('ai_llm_chat_id', $ids)->delete();
 
@@ -308,7 +308,7 @@ class LlmChatHistoryService
         $owner = self::owner();
 
         // Someone else's chat looks exactly like one that does not exist.
-        $chat = LlmChats::where('uuid', $uuid)->where('iam_user_id', $owner['user'])->first();
+        $chat = LlmChats::ownedBy($owner)->where('ai_llm_chats.uuid', $uuid)->first();
 
         if (!$chat) {
             throw new LlmProxyException('That chat does not exist.', 404, 'invalid_request_error', 'chat_not_found');
@@ -386,14 +386,16 @@ class LlmChatHistoryService
      * Content is encrypted, so it cannot be searched in SQL: the newest messages of the user are decrypted and
      * matched here, up to ai.llm.chat_search_scan_limit of them.
      *
+     * @param array{user: int, account: int} $owner
      * @return array<int, int>
      */
-    private static function matchingChatIds(int $userId, string $needle): array
+    private static function matchingChatIds(array $owner, string $needle): array
     {
         $limit = (int) config('ai.llm.chat_search_scan_limit', 2000);
 
         $messages = LlmChatMessages::join('ai_llm_chats', 'ai_llm_chats.id', '=', 'ai_llm_chat_messages.ai_llm_chat_id')
-            ->where('ai_llm_chats.iam_user_id', $userId)
+            ->where('ai_llm_chats.iam_user_id', $owner['user'])
+            ->where('ai_llm_chats.iam_account_id', $owner['account'])
             ->whereNull('ai_llm_chats.deleted_at')
             ->orderByDesc('ai_llm_chat_messages.id')
             ->limit($limit)
