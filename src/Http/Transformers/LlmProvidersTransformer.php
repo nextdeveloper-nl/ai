@@ -39,13 +39,15 @@ class LlmProvidersTransformer extends AbstractLlmProvidersTransformer
         }
 
         // Platform providers are the upstreams behind the public models; customers never see who they are.
-        if ($model->iam_account_id === null && !UserHelper::hasRole('ai-admin')) {
+        if (\NextDeveloper\AI\Services\PlatformAccount::owns($model->iam_account_id === null ? null : (int) $model->iam_account_id) && !UserHelper::hasRole('ai-admin')) {
             $transformed = array_merge($transformed, [
                 'name'     => 'PlusClouds',
                 'slug'     => null,
                 'driver'   => null,
                 'base_url' => null,
                 'config'   => null,
+                'iam_user_id'    => null,
+                'iam_account_id' => null,
             ]);
         }
 

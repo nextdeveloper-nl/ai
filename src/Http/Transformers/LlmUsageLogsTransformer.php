@@ -41,7 +41,7 @@ class LlmUsageLogsTransformer extends AbstractLlmUsageLogsTransformer
             'model'              => $model->requested_model ?? $model->model,
             'error_message'      => $model->error_message ? 'The model could not complete the request.' : null,
             'attempts'           => array_map(
-                fn ($attempt) => array_intersect_key((array) $attempt, array_flip(['status', 'status_code', 'latency_ms'])),
+                fn ($attempt) => array_intersect_key((array) $attempt, array_flip(['public_model', 'status', 'status_code', 'latency_ms'])),
                 (array) ($model->attempts ?? [])
             ),
         ]);

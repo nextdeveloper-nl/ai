@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use NextDeveloper\AI\Authorization\Roles\AIAdminRole;
 use NextDeveloper\AI\Authorization\Roles\AIManagerRole;
 use NextDeveloper\AI\Authorization\Roles\AIUserRole;
+use NextDeveloper\AI\Services\PlatformAccount;
 use NextDeveloper\IAM\Database\Models\Accounts;
 use NextDeveloper\IAM\Database\Models\Users;
 use NextDeveloper\IAM\Helpers\UserHelper;
@@ -37,11 +38,13 @@ class AccountScopeTest extends TestCase
         $capsule->bootEloquent();
 
         $this->actAs(self::ACCOUNT_A, self::USER_A1);
+        PlatformAccount::fake(null);
     }
 
     protected function tearDown(): void
     {
         $this->setHelperState(null, null);
+        PlatformAccount::fake(null, false);
         parent::tearDown();
     }
 
@@ -164,6 +167,16 @@ class AccountScopeTest extends TestCase
         foreach ([new AIManagerRole(), new AIUserRole()] as $role) {
             $this->assertStringContainsString('or "ai_llm_models"."is_public" = 1', $this->scoped($role, 'ai_llm_models'));
             $this->assertStringNotContainsString('is_public', $this->scoped($role, 'ai_llm_providers'));
+        }
+    }
+
+    public function test_providers_of_the_platform_account_are_visible_to_every_account(): void
+    {
+        PlatformAccount::fake(5);
+
+        foreach ([new AIManagerRole(), new AIUserRole()] as $role) {
+            $this->assertStringContainsString('or "ai_llm_providers"."iam_account_id" = 5', $this->scoped($role, 'ai_llm_providers'));
+            $this->assertStringNotContainsString('= 5', $this->scoped($role, 'ai_llm_aliases'));
         }
     }
 

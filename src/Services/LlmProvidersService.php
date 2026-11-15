@@ -80,7 +80,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
         $provider = LlmProviders::where('uuid', $ref)->first();
 
         throw_if(
-            $provider && $provider->iam_account_id === null && !UserHelper::hasRole('ai-admin'),
+            $provider && \NextDeveloper\AI\Services\PlatformAccount::owns($provider->iam_account_id === null ? null : (int) $provider->iam_account_id) && !UserHelper::hasRole('ai-admin'),
             new NotAllowedException("Only ai-admin can {$action} platform providers.")
         );
     }
@@ -100,7 +100,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
 
         // Syncing rewrites models and prices of every customer, so it is an admin job for platform providers.
         throw_if(
-            $provider->iam_account_id === null && !UserHelper::hasRole('ai-admin'),
+            \NextDeveloper\AI\Services\PlatformAccount::owns($provider->iam_account_id === null ? null : (int) $provider->iam_account_id) && !UserHelper::hasRole('ai-admin'),
             new NotAllowedException('Only ai-admin can sync platform providers.')
         );
 
@@ -156,8 +156,8 @@ class LlmProvidersService extends AbstractLlmProvidersService
 
             // Direct update: this only mirrors upstream state, no observer/permission round trip needed.
             // A missing upstream price keeps the previous one rather than wiping it.
+            // display_name is not synced after creation: admins correct the upstream's casing by hand.
             $changes = array_filter([
-                'display_name'        => $model['display_name'],
                 'input_price_per_1m'  => $model['input_price_per_1m'] ?? null,
                 'output_price_per_1m' => $model['output_price_per_1m'] ?? null,
                 'cache_read_price_per_1m'  => $model['cache_read_price_per_1m'] ?? null,

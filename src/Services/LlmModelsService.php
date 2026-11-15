@@ -27,7 +27,7 @@ class LlmModelsService extends AbstractLlmModelsService
 
         throw_if(!$provider, new NotAllowedException('Provider not found or not allowed.'));
 
-        if ($provider->iam_account_id === null) {
+        if (\NextDeveloper\AI\Services\PlatformAccount::owns(self::accountId($provider))) {
             throw_if(
                 !UserHelper::hasRole('ai-admin'),
                 new NotAllowedException('Only ai-admin can add models to platform providers.')
@@ -48,6 +48,11 @@ class LlmModelsService extends AbstractLlmModelsService
         return parent::create($data);
     }
 
+    private static function accountId(LlmProviders $provider): ?int
+    {
+        return $provider->iam_account_id === null ? null : (int) $provider->iam_account_id;
+    }
+
     /**
      * Only ai-admin decides which models are public: a public model is served to every account, so the owner of an
      * account provider must not be able to publish one. The owner still edits the rest of the model, but cannot move it to another provider or owner.
@@ -63,7 +68,7 @@ class LlmModelsService extends AbstractLlmModelsService
             )->first();
 
             throw_if(
-                $provider && $provider->iam_account_id === null,
+                $provider && \NextDeveloper\AI\Services\PlatformAccount::owns(self::accountId($provider)),
                 new NotAllowedException('Only ai-admin can change the models of platform providers.')
             );
         }

@@ -49,6 +49,11 @@ trait ScopesAiRecordsToAccount
                 if ($table === 'ai_llm_models') {
                     $query->orWhere($table.'.is_public', true);
                 }
+
+                // Providers owned by the platform account are platform providers too (the transformer hides who they are).
+                if ($table === 'ai_llm_providers' && ($platformAccountId = \NextDeveloper\AI\Services\PlatformAccount::id()) !== null) {
+                    $query->orWhere($table.'.iam_account_id', $platformAccountId);
+                }
             });
 
             return;
