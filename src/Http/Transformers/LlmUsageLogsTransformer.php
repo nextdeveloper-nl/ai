@@ -46,6 +46,14 @@ class LlmUsageLogsTransformer extends AbstractLlmUsageLogsTransformer
             ),
         ]);
 
+        // Carbon objects do not survive the cache round trip (they come back without a timezone marker),
+        // so the dates are cached as ISO-8601 UTC strings.
+        foreach (['created_at', 'updated_at', 'deleted_at'] as $dateField) {
+            if (($transformed[$dateField] ?? null) instanceof \DateTimeInterface) {
+                $transformed[$dateField] = \Illuminate\Support\Carbon::instance($transformed[$dateField])->utc()->toIso8601ZuluString('microsecond');
+            }
+        }
+
         Cache::set(
             CacheHelper::getKey('LlmUsageLogs', $model->uuid, 'Transformed'),
             $transformed
