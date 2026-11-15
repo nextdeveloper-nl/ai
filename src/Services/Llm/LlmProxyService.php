@@ -160,7 +160,8 @@ class LlmProxyService
     {
         unset($meta['provider']);
 
-        $meta['model'] = $meta['requested_model'] ?? $meta['model'] ?? null;
+        // The model that answered: its public id, or the requested name when the target has none.
+        $meta['model'] = $meta['public_model'] ?? $meta['requested_model'] ?? $meta['model'] ?? null;
         $meta['attempts'] = array_map(
             fn ($attempt) => array_intersect_key((array) $attempt, array_flip(['public_model', 'status', 'status_code', 'latency_ms'])),
             (array) ($meta['attempts'] ?? [])
@@ -485,6 +486,7 @@ class LlmProxyService
             'requested_model' => $target->requestedModel,
             'provider'        => $target->provider->slug,
             'model'           => $target->model,
+            'public_model'    => $target->pricing?->public_id ?? $target->publicId,
             'input_tokens'    => (int) $log->input_tokens,
             'output_tokens'   => (int) $log->output_tokens,
             'cost'            => (float) $log->cost,

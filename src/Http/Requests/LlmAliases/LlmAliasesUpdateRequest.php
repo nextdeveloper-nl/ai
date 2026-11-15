@@ -20,7 +20,7 @@ class LlmAliasesUpdateRequest extends AbstractFormRequest
         'description' => 'nullable|string|max:500',
         'fallbacks' => 'nullable|array|max:5',
         'fallbacks.*.provider' => 'required_with:fallbacks|string',
-        'fallbacks.*.model' => 'required_with:fallbacks|string',
+        'fallbacks.*.model' => ['required_with:fallbacks', 'string', $this->fallbackDiffersRule()],
         'fallback_on_error' => 'boolean',
         'fallback_on_rate_limit' => 'boolean',
         'fallback_on_timeout' => 'boolean',
@@ -56,6 +56,21 @@ class LlmAliasesUpdateRequest extends AbstractFormRequest
 
         // The alias is sent as the model id of /ai/v1 calls, so it must be a plain slug.
         return [$required ? 'required' : 'nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/', $notPublicPrefix, $unique];
+    }
+
+    /**
+     * A fallback that is the primary model itself would only repeat the same call.
+     */
+    private function fallbackDiffersRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            $index = explode('.', $attribute)[1] ?? null;
+            $provider = $this->input("fallbacks.{$index}.provider");
+
+            if ($provider === $this->input('target_provider') && $value === $this->input('target_model')) {
+                $fail('Fallback must differ from the primary model.');
+            }
+        };
     }
 
     /**

@@ -47,6 +47,18 @@ class ModelResolver
             return $offers[0]->withAlternates(array_slice($offers, 1));
         }
 
+        // An alias that exists but is switched off says so instead of looking like an unknown model.
+        $inactiveAlias = LlmAliases::withoutGlobalScopes()
+            ->where(fn ($q) => $q->where('iam_account_id', $accountId)->orWhereNull('iam_account_id'))
+            ->where('alias', $requested)
+            ->where('is_active', false)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($inactiveAlias) {
+            throw new LlmProxyException("The alias '{$requested}' is inactive. Activate it to use it.", 409, 'invalid_request_error', 'alias_inactive');
+        }
+
         // "provider/model" ids reveal the provider, so customers only get them when the platform allows it.
         if (config('ai.llm.allow_provider_model_ids', false) && str_contains($requested, '/')) {
             [$providerSlug, $modelId] = explode('/', $requested, 2);
