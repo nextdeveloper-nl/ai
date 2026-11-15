@@ -24,6 +24,10 @@ return [
     'llm' => [
         // Cron of ai:llm-sync, which refreshes the models and prices of every active platform provider.
         'sync_cron'          => env('AI_LLM_SYNC_CRON', '0 * * * *'),
+        // Cron of ai:llm-speed-test, which measures the tokens per second of every active platform model.
+        'speed_test_cron'    => env('AI_LLM_SPEED_TEST_CRON', '30 3 * * *'),
+        // Tokens per second (median of the last days) from which a model gets speed 2, 3, 4 and 5; below the first is 1.
+        'speed_thresholds'   => [20, 50, 100, 200],
         // Prefix of the model names customers use ("plusclouds/gemma-4-31b-it"); providers never show up in them.
         'public_prefix'      => env('AI_LLM_PUBLIC_PREFIX', 'plusclouds'),
         // Let callers address a model as "provider/model" too. Off: that would reveal the provider.
