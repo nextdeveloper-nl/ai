@@ -48,7 +48,14 @@ class LlmAliasesCreateRequest extends AbstractFormRequest
             $unique->ignore($ignoreUuid, 'uuid');
         }
 
-        return [$required ? 'required' : 'nullable', 'string', $unique];
+        $notPublicPrefix = function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && str_starts_with($value, \NextDeveloper\AI\Services\Llm\ModelResolver::publicPrefix() . '/')) {
+                $fail('The alias may not start with the public model prefix.');
+            }
+        };
+
+        // The alias is sent as the model id of /ai/v1 calls, so it must be a plain slug.
+        return [$required ? 'required' : 'nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/', $notPublicPrefix, $unique];
     }
 
     /**

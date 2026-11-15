@@ -41,6 +41,11 @@ class LlmUsageLogsQueryFilter extends AbstractQueryFilter
 
     public function aiLlmApiKeyId($value)
     {
+        // "none" selects the calls made without an API key (the panel's own chat).
+        if (in_array(strtolower((string) $value), ['none', 'null'], true)) {
+            return $this->builder->whereNull('ai_llm_api_key_id');
+        }
+
         $related = \NextDeveloper\AI\Database\Models\LlmApiKeys::where('uuid', $value)->first();
 
         if($related) {
