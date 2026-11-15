@@ -156,8 +156,8 @@ class LlmProvidersService extends AbstractLlmProvidersService
 
             // Direct update: this only mirrors upstream state, no observer/permission round trip needed.
             // A missing upstream price keeps the previous one rather than wiping it.
+            // display_name is not synced after creation: admins correct the upstream's casing by hand.
             $changes = array_filter([
-                'display_name'        => $model['display_name'],
                 'input_price_per_1m'  => $model['input_price_per_1m'] ?? null,
                 'output_price_per_1m' => $model['output_price_per_1m'] ?? null,
                 'cache_read_price_per_1m'  => $model['cache_read_price_per_1m'] ?? null,

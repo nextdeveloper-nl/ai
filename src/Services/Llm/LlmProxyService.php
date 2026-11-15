@@ -162,7 +162,7 @@ class LlmProxyService
 
         $meta['model'] = $meta['requested_model'] ?? $meta['model'] ?? null;
         $meta['attempts'] = array_map(
-            fn ($attempt) => array_intersect_key((array) $attempt, array_flip(['status', 'status_code', 'latency_ms'])),
+            fn ($attempt) => array_intersect_key((array) $attempt, array_flip(['public_model', 'status', 'status_code', 'latency_ms'])),
             (array) ($meta['attempts'] ?? [])
         );
 
@@ -449,13 +449,14 @@ class LlmProxyService
     }
 
     /**
-     * @return array{provider: string, model: string, status: string, status_code: ?int, error: ?string, latency_ms: int}
+     * @return array{provider: string, model: string, public_model: ?string, status: string, status_code: ?int, error: ?string, latency_ms: int}
      */
     private static function attempt(LlmTarget $target, ?int $statusCode, ?string $error, int $latencyMs): array
     {
         return [
             'provider'    => $target->provider->slug,
             'model'       => $target->model,
+            'public_model' => $target->pricing?->public_id ?? $target->publicId,
             'status'      => $error === null && $statusCode !== null && $statusCode < 400 ? 'success' : 'failed',
             'status_code' => $statusCode,
             'error'       => $error,
