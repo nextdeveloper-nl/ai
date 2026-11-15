@@ -159,6 +159,14 @@ class AccountScopeTest extends TestCase
         }
     }
 
+    public function test_public_models_stay_visible_when_a_platform_account_owns_them(): void
+    {
+        foreach ([new AIManagerRole(), new AIUserRole()] as $role) {
+            $this->assertStringContainsString('or "ai_llm_models"."is_public" = 1', $this->scoped($role, 'ai_llm_models'));
+            $this->assertStringNotContainsString('is_public', $this->scoped($role, 'ai_llm_providers'));
+        }
+    }
+
     public function test_helpers_are_public_or_own(): void
     {
         $this->assertStringContainsString(

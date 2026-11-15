@@ -44,6 +44,11 @@ trait ScopesAiRecordsToAccount
             $builder->where(function (Builder $query) use ($table, $accountId): void {
                 $query->whereNull($table.'.iam_account_id')
                     ->orWhere($table.'.iam_account_id', $accountId);
+
+                // Models the platform published (is_public) stay visible even when a platform account owns them.
+                if ($table === 'ai_llm_models') {
+                    $query->orWhere($table.'.is_public', true);
+                }
             });
 
             return;
