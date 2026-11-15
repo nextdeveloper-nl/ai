@@ -46,6 +46,8 @@ class LlmProvidersTransformer extends AbstractLlmProvidersTransformer
                 'driver'   => null,
                 'base_url' => null,
                 'config'   => null,
+                'iam_user_id'    => null,
+                'iam_account_id' => null,
             ]);
         }
 

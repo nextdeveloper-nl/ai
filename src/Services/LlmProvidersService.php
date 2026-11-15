@@ -80,7 +80,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
         $provider = LlmProviders::where('uuid', $ref)->first();
 
         throw_if(
-            $provider && $provider->iam_account_id === null && !UserHelper::hasRole('ai-admin'),
+            $provider && \NextDeveloper\AI\Services\PlatformAccount::owns($provider->iam_account_id === null ? null : (int) $provider->iam_account_id) && !UserHelper::hasRole('ai-admin'),
             new NotAllowedException("Only ai-admin can {$action} platform providers.")
         );
     }
@@ -100,7 +100,7 @@ class LlmProvidersService extends AbstractLlmProvidersService
 
         // Syncing rewrites models and prices of every customer, so it is an admin job for platform providers.
         throw_if(
-            $provider->iam_account_id === null && !UserHelper::hasRole('ai-admin'),
+            \NextDeveloper\AI\Services\PlatformAccount::owns($provider->iam_account_id === null ? null : (int) $provider->iam_account_id) && !UserHelper::hasRole('ai-admin'),
             new NotAllowedException('Only ai-admin can sync platform providers.')
         );
 
