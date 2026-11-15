@@ -131,6 +131,12 @@ class AIServiceProvider extends AbstractServiceProvider
                     }
                 })
                 ->withoutOverlapping();
+
+            // Daily speed test of the platform models (their 1-5 speed rating).
+            $this->app->make(\Illuminate\Console\Scheduling\Schedule::class)
+                ->command('ai:llm-speed-test')
+                ->cron(config('ai.llm.speed_test_cron', '30 3 * * *'))
+                ->withoutOverlapping();
         });
     }
 
@@ -139,6 +145,7 @@ class AIServiceProvider extends AbstractServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \NextDeveloper\AI\Console\Commands\SyncLlmModelsCommand::class,
+                \NextDeveloper\AI\Console\Commands\MeasureModelSpeedCommand::class,
                 \NextDeveloper\AI\Console\Commands\CreateLlmProviderCommand::class,
                 \NextDeveloper\AI\Console\Commands\SeedHelperAliasesCommand::class,
             ]);
