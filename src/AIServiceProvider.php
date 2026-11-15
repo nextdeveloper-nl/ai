@@ -100,7 +100,12 @@ class AIServiceProvider extends AbstractServiceProvider
         if (!$this->app->routesAreCached() && config('leo.allowed_routes.ai', true)) {
             $this->app['router']
                 ->namespace('NextDeveloper\AI\Http\Controllers')
-                ->middleware([\NextDeveloper\AI\Http\Middlewares\EnsureAiRoles::class])
+                ->middleware([
+                    // Fail closed: these routes sit outside the host app's `api` group, so nothing else rejects
+                    // anonymous callers. Authenticate skips app.anonymous_uris (the API-key proxy at /ai/v1/*).
+                    \NextDeveloper\IAM\Http\Middleware\Authenticate::class,
+                    \NextDeveloper\AI\Http\Middlewares\EnsureAiRoles::class,
+                ])
                 ->group(__DIR__ . DIRECTORY_SEPARATOR . 'Http' . DIRECTORY_SEPARATOR . 'api.routes.php');
         }
     }
