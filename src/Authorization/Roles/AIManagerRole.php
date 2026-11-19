@@ -16,7 +16,9 @@ class AIManagerRole extends AbstractRole implements IAuthorizationRole
 
     public const NAME = 'ai-manager';
 
-    public const LEVEL = 100;
+    //  Customer manager level (leo4#1304): admins are 100; a manager must not sit in the admin level range, but stay
+    //  below ai-user (150) so it is evaluated first for the AI tables.
+    public const LEVEL = 120;
 
     public const DESCRIPTION = 'AI manager of one account: full access to all AI objects of their own account, never of other accounts.';
 
